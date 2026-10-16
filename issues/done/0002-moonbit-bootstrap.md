@@ -1,9 +1,9 @@
 # [P0 / M0] MoonBitモジュール・公開APIとターゲット基盤を作る
 
-Status: polished
+Status: done
 Model: DeepSeek V4.1 Flash Free
 Created: 2026-10-16
-Updated: 2026-10-16
+Updated: 2026-10-17
 Branch: feat/0002-moonbit-bootstrap
 Priority: P0
 Milestone: M0
@@ -97,3 +97,5 @@ Upstream baseline: [shiguredo/mp4-rs@1282b704f44184ec792e1549b5d31e0c4c54dc59](h
 - 未決事項: package 名、最初の公開 API の具体名、命名表の配置は実装時に確定し、確定内容を本 Issue へ追記する。
 - 証跡: moon のバージョン、実行コマンド、target 別の PASS／FAIL／未実行を記録する（[0000](./0000-implementation-roadmap.md) §4・§8.1）。
 - 2026-10-16: 本文を実装可能な形式へ整備し、実装に着手可能なため polished へ更新。
+- 2026-10-17: 実装に着手
+- 2026-10-17: moon.mod(source=src, name=gpui-mbt/mp4)・src/bytes package・FourCC・black-boxテスト・README.mbt.md・CHANGES.md・.gitignore を追加。証跡: moon 0.1.20261012/moonc v0.10.15 で moon check --target native/js 成功、moon test --target native 7件PASS、--target js 7件PASS、moon fmt差分なし、moon infoレビュー済み。registry に gpui-mbt/mp4 が存在しないことを確認

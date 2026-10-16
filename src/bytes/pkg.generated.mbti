@@ -1,0 +1,32 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "gpui-mbt/mp4/bytes"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+
+// Errors
+pub(all) suberror FourCCError {
+  InvalidLength(length~ : Int)
+  NonAsciiByte(value~ : Int)
+}
+
+// Types and methods
+pub struct FourCC {
+  bytes : Bytes
+} derive(Eq, Hash, @debug.Debug)
+pub fn FourCC::as_bytes(Self) -> Bytes
+pub fn FourCC::equal(Self, Self) -> Bool
+pub fn FourCC::from_bytes(Bytes) -> Self raise FourCCError
+pub fn FourCC::from_string(StringView) -> Self raise FourCCError
+pub fn FourCC::hash(Self) -> Int
+pub fn FourCC::hash_combine(Self, Hasher) -> Unit
+pub fn FourCC::not_equal(Self, Self) -> Bool
+pub fn FourCC::to_repr(Self) -> @debug.Repr
+pub fn FourCC::to_string(Self) -> String
+
+// Type aliases
+
+// Traits

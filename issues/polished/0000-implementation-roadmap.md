@@ -164,7 +164,7 @@ M1 では**動画そのものの再生や変換**を UI に表示できなくて
 #### M0 – Project setup / oracle
 
 - [x] [0001 上流互換の対象・責務・ライセンスを固定する](../done/0001-scope-upstream-license.md) — P0
-- [ ] [0002 MoonBitモジュール・公開APIとターゲット基盤を作る](./0002-moonbit-bootstrap.md) — P0 / deps: 0001
+- [x] [0002 MoonBitモジュール・公開APIとターゲット基盤を作る](../done/0002-moonbit-bootstrap.md) — P0 / deps: 0001
 - [ ] [0003 継続的チェック・変更管理の品質ゲートを作る](./0003-ci-contract.md) — P0 / deps: 0002
 - [ ] [0004 Rust oracle・fixture・正規化goldenを構築する](./0004-oracle-fixtures.md) — P0 / deps: 0001, 0002
 
