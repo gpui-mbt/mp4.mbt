@@ -1,6 +1,6 @@
 # [P0 / M0] 上流互換の対象・責務・ライセンスを固定する
 
-Status: polished
+Status: done
 Model: DeepSeek V4.1 Flash Free
 Created: 2026-10-16
 Updated: 2026-10-16
@@ -91,3 +91,5 @@ Upstream baseline: [shiguredo/mp4-rs@1282b704f44184ec792e1549b5d31e0c4c54dc59](h
 - 未決事項: `docs/upstream.md`／`docs/scope.md` の章立て、上流 fixture の個別ファイルと配布可否は実装時に確定し、確定内容を本 Issue へ追記する。
 - 証跡ルール: ライセンス・帰属の確認記録（URL・SHA・確認日）を残し、未確認を PASS と混同しない。
 - 2026-10-16: 本文を実装可能な形式へ整備し、実装に着手可能なため polished へ更新。
+- 2026-10-16: 実装に着手
+- 2026-10-16: docs/upstream.md・docs/scope.md・LICENSE/NOTICE・README帰属表示を追加。文書レビューとリンク確認を実施

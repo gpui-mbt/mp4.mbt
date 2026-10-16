@@ -1,0 +1,13 @@
+mp4.mbt
+Copyright 2026 The mp4.mbt Authors
+
+This product includes software developed by Shiguredo Inc.
+(https://github.com/shiguredo/mp4-rs, Apache License 2.0).
+
+The Rust implementation at the pinned commit below is used as a behavioural
+reference (oracle) for compatibility testing. Test fixtures under
+`tests/fixtures/` that originate from the upstream repository remain under
+the upstream Apache License 2.0 terms.
+
+Pinned upstream reference:
+  shiguredo/mp4-rs@1282b704f44184ec792e1549b5d31e0c4c54dc59
