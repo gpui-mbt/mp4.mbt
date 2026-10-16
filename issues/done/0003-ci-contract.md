@@ -1,9 +1,9 @@
 # [P0 / M0] 継続的チェック・変更管理の品質ゲートを作る
 
-Status: polished
+Status: done
 Model: DeepSeek V4.1 Flash Free
 Created: 2026-10-16
-Updated: 2026-10-16
+Updated: 2026-10-17
 Branch: chore/0003-ci-contract
 Priority: P0
 Milestone: M0
@@ -98,3 +98,5 @@ Upstream baseline: [shiguredo/mp4-rs@1282b704f44184ec792e1549b5d31e0c4c54dc59](h
 - 未決事項: ジョブ名、matrix の最終形、required checks と branch protection の一覧は実装時に確定し、確定内容を本 Issue へ追記する。
 - 証跡ルール: PASS／FAIL／SKIP（未実行）を混同せず、実行ログ・commit SHA・target・日時を残す（[0000](./0000-implementation-roadmap.md) §8.1）。
 - 2026-10-16: 本文を実装可能な形式へ整備し、実装に着手可能なため polished へ更新。
+- 2026-10-17: 実装に着手
+- 2026-10-17: ci.yml（moon-check/test native+js、fmt、info、oracle固定SHA+golden決定性）と pages.yml（CI成功時のみweb/distをデプロイ、未実装時は明示スキップ）、docs/ci.md を追加。検証: スクラッチクローンで故障注入5種（構文エラー→check FAIL、golden改変→--check FAIL、fixture欠落→FAIL報告、public API変更→.mbti差分検出、fmt違反→--check FAIL）とmoon test失敗検出を実行、YAML構文検証済み。GitHub Actions実走は本環境では未実行（UNVERIFIED）

@@ -55,6 +55,9 @@ moon fmt                        # format
 moon info                       # regenerate public interface (.mbti) files
 ```
 
+CI jobs, required checks and local reproduction steps are documented in
+[`docs/ci.md`](./docs/ci.md).
+
 ## Licence
 
 Apache License 2.0. See [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE). Upstream-derived test fixtures remain under

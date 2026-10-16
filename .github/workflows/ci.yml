@@ -1,0 +1,109 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Keep in sync with the development toolchain (see docs/ci.md).
+  RUSTUP_TOOLCHAIN: "1.94.0"
+
+jobs:
+  moon-check:
+    name: moon-check-${{ matrix.target }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [native, js]
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+      - name: Record toolchain versions
+        run: moon version --all
+      - name: moon check
+        run: moon check --target ${{ matrix.target }}
+
+  moon-test:
+    name: moon-test-${{ matrix.target }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [native, js]
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+      - name: Record toolchain versions
+        run: moon version --all
+      - name: moon test
+        run: moon test --target ${{ matrix.target }}
+
+  moon-fmt:
+    name: moon-fmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+      - name: Check formatting (no diff allowed)
+        run: moon fmt --check
+
+  moon-info:
+    name: moon-info (public API diff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+      - name: Regenerate .mbti and require no diff
+        run: |
+          moon info
+          if ! git diff --exit-code -- '*.mbti'; then
+            echo "::error::Public API (.mbti) changed. Review the diff and commit the regenerated files."
+            exit 1
+          fi
+
+  oracle:
+    name: oracle (pinned Rust golden check)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install pinned Rust toolchain
+        run: rustup show && cargo --version
+      - name: Cache cargo registry and git dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-${{ runner.os }}-${{ hashFiles('tools/oracle/Cargo.lock') }}
+          restore-keys: cargo-${{ runner.os }}-
+      - name: Oracle unit tests
+        working-directory: tools/oracle
+        run: cargo test
+      - name: Set up MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+      - name: Verify fixture hashes and golden determinism
+        run: moon run tools/oracle/regenerate_fixtures.mbtx -- --check

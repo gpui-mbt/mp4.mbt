@@ -8,6 +8,11 @@ versions (`M0`–`M5`); unreleased work is listed under `Unreleased`.
 
 ### Added
 
+- CI quality gates (`.github/workflows/ci.yml`): moon check/test for native and
+  js targets, fmt diff, `.mbti` public API diff, pinned Rust oracle job with
+  golden determinism check; Pages workflow deploys only `web/dist` after a
+  successful CI run on main; contract documented in `docs/ci.md` (issue 0003).
+
 - Rust oracle tool (`tools/oracle`, pinned upstream revision `1282b704`,
   Rust 1.94.0) with normalised JSON golden schema v1 (64-bit integers as
   decimal strings), fixture manifest with SHA256/attribution
