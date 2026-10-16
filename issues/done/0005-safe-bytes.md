@@ -1,9 +1,9 @@
 # [P0 / M1] Bounds-safeなバイト列・ビット列・エラー型を作る
 
-Status: polished
+Status: done
 Model: DeepSeek V4.1 Flash Free
 Created: 2026-10-16
-Updated: 2026-10-16
+Updated: 2026-10-17
 Branch: feat/0005-safe-bytes
 Priority: P0
 Milestone: M1
@@ -96,3 +96,5 @@ MP4の大半は信頼できない長さ付きbinary入力であり、整数overf
 - 証跡ルール: checkboxは実際に実行した証拠がある項目だけ完了にする。実行コマンド・target・commit SHA・fixture checksum・PASS/FAIL/未実行の区分を残す（[0000](./0000-implementation-roadmap.md)と[0003](./0003-ci-contract.md)に整合）。
 - 実装時の未決事項: package名、カーソル型とエラー型の公開名、`ParseLimits`の既定値、ByteArray／Bytesの表現選定（計測後に確定）。
 - 2026-10-16: 本文を実装可能な形式へ整備し、実装に着手可能なため polished へ更新。
+- 2026-10-17: bounds-safe cursor・bitstream・エラー型の実装に着手
+- 2026-10-17: src/bytes（Mp4Error/ErrorKind、ParseLimits、ReadCursor/WriteCursor、FixedPointNumber、uint64_to_index/uint64_to_exact_double）と src/bitstream（BitReader/BitWriter）を実装。証跡: moon check native/js 警告0、moon test --target native 65件PASS、--target js 65件PASS、moon fmt --check 差分なし、moon info 更新済み（公開APIがI/O非依存）

@@ -1,0 +1,47 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "gpui-mbt/mp4/bitstream"
+
+import {
+  "gpui-mbt/mp4/bytes",
+  "moonbitlang/core/buffer",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub struct BitReader {
+  data : Bytes
+  mut byte_position : Int
+  mut bit_position : Int
+}
+pub fn BitReader::bit_length(Self) -> Int
+pub fn BitReader::byte_align(Self) -> Unit
+pub fn BitReader::is_byte_aligned(Self) -> Bool
+pub fn BitReader::new(Bytes) -> Self
+pub fn BitReader::position(Self) -> Int
+pub fn BitReader::read_bit(Self) -> UInt raise @bytes.Mp4Error
+pub fn BitReader::read_bits(Self, Int) -> UInt raise @bytes.Mp4Error
+pub fn BitReader::read_bits64(Self, Int) -> UInt64 raise @bytes.Mp4Error
+pub fn BitReader::remaining_bits(Self) -> Int
+pub fn BitReader::skip_bits(Self, Int) -> Unit raise @bytes.Mp4Error
+
+pub struct BitWriter {
+  buffer : @buffer.Buffer
+  mut pending : UInt
+  mut pending_bits : Int
+}
+pub fn BitWriter::byte_align(Self) -> Unit
+pub fn BitWriter::new() -> Self
+pub fn BitWriter::position(Self) -> Int
+pub fn BitWriter::reset(Self) -> Unit
+pub fn BitWriter::skip_bits(Self, Int) -> Unit raise @bytes.Mp4Error
+pub fn BitWriter::to_bytes(Self) -> Bytes
+pub fn BitWriter::write_bit(Self, UInt) -> Unit
+pub fn BitWriter::write_bits(Self, UInt, Int) -> Unit raise @bytes.Mp4Error
+pub fn BitWriter::write_bits64(Self, UInt64, Int) -> Unit raise @bytes.Mp4Error
+
+// Type aliases
+
+// Traits

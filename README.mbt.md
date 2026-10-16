@@ -11,7 +11,7 @@ This is an independent port, not an official shiguredo product. The Rust impleme
 The port is being implemented milestone by milestone. See [`issues/polished/0000-implementation-roadmap.md`](issues/polished/0000-implementation-roadmap.md)
 for the plan and current progress. Unsupported features are never described here as supported.
 
-- [ ] M0: scaffold, CI, Rust oracle and fixtures
+- [x] M0: scaffold, CI, Rust oracle and fixtures
 - [ ] M1: boxes, read-only MP4 demux, Native CLI, Web dump, Rust diff lab
 - [ ] M2: fragmented MP4 demux/mux
 - [ ] M3: standard MP4 mux
@@ -29,16 +29,19 @@ Rust oracle as the default criterion.
 
 ## Usage
 
-The end-to-end demux API is not implemented yet (M1 in progress). The first public core type is
-`FourCC` in the `gpui-mbt/mp4/bytes` package:
+The end-to-end demux API is not implemented yet (M1 in progress). The foundation packages are
+`gpui-mbt/mp4/bytes` (bounds-safe Big Endian cursors, `Mp4Error` classification, `ParseLimits`,
+`FourCC`) and `gpui-mbt/mp4/bitstream` (MSB-first `BitReader`/`BitWriter`):
 
 ```mbt nocheck
 ///|
 import @bytes from "gpui-mbt/mp4/bytes"
 
 fn main {
-  let ftyp = @bytes.FourCC::from_string("ftyp")!
-  println(ftyp.to_string())
+  let writer = @bytes.WriteCursor::new()
+  writer.write_u16(0x1234)
+  writer.write_u32(0x56789ABC)
+  println(writer.to_bytes().length()) // 6
 }
 ```
 

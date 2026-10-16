@@ -8,6 +8,12 @@ versions (`M0`–`M5`); unreleased work is listed under `Unreleased`.
 
 ### Added
 
+- Bounds-safe byte/bit foundations (issue 0005): `src/bytes` gains the shared
+  `Mp4Error`/`ErrorKind` classification, `ParseLimits`,
+  `ReadCursor`/`WriteCursor` (Big Endian, position advances only on success),
+  `FixedPointNumber` and explicit u64 → index/Double conversions; `src/bitstream`
+  gains MSB-first `BitReader`/`BitWriter`.
+
 - CI quality gates (`.github/workflows/ci.yml`): moon check/test for native and
   js targets, fmt diff, `.mbti` public API diff, pinned Rust oracle job with
   golden determinism check; Pages workflow deploys only `web/dist` after a

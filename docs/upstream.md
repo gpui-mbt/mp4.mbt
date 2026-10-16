@@ -39,14 +39,28 @@ MoonBit 側の最終的な package / 公開名は Issue 0002 で確定し、本�
 
 ### ルート (`lib.rs`)
 
-| 上流 | 概要 | MoonBit 側の対応（予定） |
+| 上流 | 概要 | MoonBit 側の対応 |
 | --- | --- | --- |
 | `BaseBox` / `BoxHeader` / `BoxSize` / `BoxType` / `FullBox` / `FullBoxFlags` / `FullBoxHeader` | box envelope と共通ヘッダ | `src/box`（Issue 0006） |
-| `Either<T, U>` | 2 形態の union | `src/bytes`（Issue 0005） |
-| `FixedPointNumber` / `Uint` / `Utf8String` / `LanguageCode` | 基本値型 | `src/bytes`（Issue 0005） |
-| `Mp4File` / `Mp4FileTime` / `TrackKind` / `SampleFlags` | 時刻・トラック・フラグ | `src/bytes` / `src/boxes`（Issue 0005/0008） |
-| `Decode` / `Encode` / `Error` / `ErrorKind` / `Result` | codec trait と失敗分類 | `src/bytes`（Issue 0005） |
+| `Either<T, U>` | 2 形態の union | `src/bytes`（後続 Issue で追加。利用は 0008 以降） |
+| `FixedPointNumber` | 固定小数点数 | `src/bytes` の `FixedPointNumber`（Issue 0005、完了） |
+| `Uint` / `Utf8String` / `LanguageCode` | 基本値型 | `src/bytes`（後続 Issue で追加。利用は 0008 以降） |
+| `Mp4File` / `Mp4FileTime` / `TrackKind` / `SampleFlags` | 時刻・トラック・フラグ | `src/bytes` / `src/boxes`（Issue 0008 以降） |
+| `Error` / `ErrorKind` | 失敗分類 | `src/bytes` の `Mp4Error` / `ErrorKind`（Issue 0005、完了。`Either`/`Uint` 等は後続） |
+| `Decode` / `Encode` / `Result` | codec trait | `src/bytes`（Issue 0006） |
 | `aux::{ChunkAccessor, SampleAccessor, SampleTableAccessor, SampleTableAccessorError}` | sample table 走査 | `src/boxes`（Issue 0009） |
+
+Issue 0005 で確定した対応の補足:
+
+| 上流 | MoonBit 側 | 備考 |
+| --- | --- | --- |
+| `Result<T>` | `T raise Mp4Error` | MoonBit のエラー機構（`raise`/`catch`）で表現する |
+| `codec::Error` | `Mp4Error` | `Error` は MoonBit の予約型名のため改名。`kind` / `reason` / `loc`（`SourceLoc`）に加え `offset: UInt64?` を持つ |
+| 長さ付き入力の読み取り | `ReadCursor`（`src/bytes`） | Big Endian、位置は成功時のみ前進、確保量は `ParseLimits` で制限 |
+| 長さ付き出力の書き込み | `WriteCursor`（`src/bytes`） | 伸長バッファへ Big Endian 書き込み |
+| Rust の無制限 allocation/nesting | `ParseLimits`（`src/bytes`） | 既定値 `DEFAULT_MAX_ALLOCATION_SIZE` = 1 GiB、`DEFAULT_MAX_NESTING_DEPTH` = 64、上限は `ParseLimits::new` で変更 |
+| u64 → JS Number / index 変換 | `uint64_to_index` / `uint64_to_exact_double`（`src/bytes`） | 2^31-1 超の index、2^53 超の `Double` 化を暗黙に丸めず `InvalidInput` で拒否 |
+| 上流 `bitstream` のビット読み | `BitReader` / `BitWriter`（`src/bitstream`） | MSB 先。終端超過は `InvalidInput`。本格的な NAL/AAC/AV1 解析は M4（0024–0026） |
 
 ### `boxes` / `codec_string` / `descriptors`
 

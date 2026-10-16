@@ -2,10 +2,22 @@
 package "gpui-mbt/mp4/bytes"
 
 import {
+  "moonbitlang/core/buffer",
   "moonbitlang/core/debug",
 }
 
 // Values
+pub const DEFAULT_MAX_ALLOCATION_SIZE : UInt64 = 1073741824
+
+pub const DEFAULT_MAX_NESTING_DEPTH : Int = 64
+
+pub const MAX_EXACT_DOUBLE_INTEGER : UInt64 = 9007199254740992
+
+#callsite(autofill(loc))
+pub fn uint64_to_exact_double(UInt64, loc~ : SourceLoc) -> Double raise Mp4Error
+
+#callsite(autofill(loc))
+pub fn uint64_to_index(UInt64, StringView, loc~ : SourceLoc) -> Int raise Mp4Error
 
 // Errors
 pub(all) suberror FourCCError {
@@ -13,7 +25,49 @@ pub(all) suberror FourCCError {
   NonAsciiByte(value~ : Int)
 }
 
+pub(all) suberror Mp4Error {
+  Mp4Error(kind~ : ErrorKind, reason~ : String, offset~ : UInt64?, loc~ : SourceLoc)
+}
+#callsite(autofill(loc))
+pub fn Mp4Error::insufficient_buffer(UInt64, UInt64, loc~ : SourceLoc) -> Self
+#callsite(autofill(loc))
+pub fn Mp4Error::invalid_data(StringView, loc~ : SourceLoc) -> Self
+#callsite(autofill(loc))
+pub fn Mp4Error::invalid_input(StringView, loc~ : SourceLoc) -> Self
+#callsite(autofill(loc))
+pub fn Mp4Error::new(ErrorKind, StringView, loc~ : SourceLoc) -> Self
+pub fn Mp4Error::to_string(Self) -> String
+#callsite(autofill(loc))
+pub fn Mp4Error::unsupported(StringView, loc~ : SourceLoc) -> Self
+pub fn Mp4Error::with_offset(Self, UInt64) -> Self
+
 // Types and methods
+pub(all) enum ErrorKind {
+  InvalidInput
+  InvalidData
+  InsufficientBuffer
+  Unsupported
+} derive(Eq, Hash)
+pub fn ErrorKind::equal(Self, Self) -> Bool
+pub fn ErrorKind::hash(Self) -> Int
+pub fn ErrorKind::hash_combine(Self, Hasher) -> Unit
+pub fn ErrorKind::not_equal(Self, Self) -> Bool
+pub fn ErrorKind::to_string(Self) -> String
+
+pub struct FixedPointNumber {
+  integer : Int
+  fraction : UInt
+} derive(Eq, Hash, @debug.Debug)
+pub fn FixedPointNumber::equal(Self, Self) -> Bool
+pub fn FixedPointNumber::fraction(Self) -> UInt
+pub fn FixedPointNumber::hash(Self) -> Int
+pub fn FixedPointNumber::hash_combine(Self, Hasher) -> Unit
+pub fn FixedPointNumber::integer(Self) -> Int
+pub fn FixedPointNumber::new(Int, UInt) -> Self
+pub fn FixedPointNumber::not_equal(Self, Self) -> Bool
+pub fn FixedPointNumber::to_double(Self, Int) -> Double
+pub fn FixedPointNumber::to_repr(Self) -> @debug.Repr
+
 pub struct FourCC {
   bytes : Bytes
 } derive(Eq, Hash, @debug.Debug)
@@ -26,6 +80,81 @@ pub fn FourCC::hash_combine(Self, Hasher) -> Unit
 pub fn FourCC::not_equal(Self, Self) -> Bool
 pub fn FourCC::to_repr(Self) -> @debug.Repr
 pub fn FourCC::to_string(Self) -> String
+
+pub struct ParseLimits {
+  max_allocation_size : UInt64
+  max_nesting_depth : Int
+} derive(Eq, @debug.Debug)
+#callsite(autofill(loc))
+pub fn ParseLimits::check_allocation(Self, UInt64, loc~ : SourceLoc) -> Unit raise Mp4Error
+#callsite(autofill(loc))
+pub fn ParseLimits::check_nesting_depth(Self, Int, loc~ : SourceLoc) -> Unit raise Mp4Error
+pub fn ParseLimits::default() -> Self
+pub fn ParseLimits::equal(Self, Self) -> Bool
+pub fn ParseLimits::max_allocation_size(Self) -> UInt64
+pub fn ParseLimits::max_nesting_depth(Self) -> Int
+pub fn ParseLimits::new(max_allocation_size? : UInt64, max_nesting_depth? : Int) -> Self
+pub fn ParseLimits::not_equal(Self, Self) -> Bool
+pub fn ParseLimits::to_repr(Self) -> @debug.Repr
+pub impl Default for ParseLimits
+
+pub struct ReadCursor {
+  data : BytesView
+  mut position : Int
+  base_offset : UInt64
+  limits : ParseLimits
+}
+pub fn ReadCursor::base_offset(Self) -> UInt64
+pub fn ReadCursor::data(Self) -> BytesView
+pub fn ReadCursor::is_empty(Self) -> Bool
+pub fn ReadCursor::length(Self) -> Int
+pub fn ReadCursor::limits(Self) -> ParseLimits
+pub fn ReadCursor::new(Bytes) -> Self
+pub fn ReadCursor::offset(Self) -> UInt64
+pub fn ReadCursor::position(Self) -> Int
+pub fn ReadCursor::read_bytes(Self, Int) -> Bytes raise Mp4Error
+pub fn ReadCursor::read_bytes_view(Self, Int) -> BytesView raise Mp4Error
+pub fn ReadCursor::read_fixed_16_16(Self) -> FixedPointNumber raise Mp4Error
+pub fn ReadCursor::read_fixed_8_8(Self) -> FixedPointNumber raise Mp4Error
+pub fn ReadCursor::read_fourcc(Self) -> FourCC raise Mp4Error
+pub fn ReadCursor::read_i16(Self) -> Int raise Mp4Error
+pub fn ReadCursor::read_i32(Self) -> Int raise Mp4Error
+pub fn ReadCursor::read_i64(Self) -> Int64 raise Mp4Error
+pub fn ReadCursor::read_i8(Self) -> Int raise Mp4Error
+pub fn ReadCursor::read_remaining(Self) -> Bytes raise Mp4Error
+pub fn ReadCursor::read_remaining_view(Self) -> BytesView
+pub fn ReadCursor::read_u16(Self) -> UInt raise Mp4Error
+pub fn ReadCursor::read_u24(Self) -> UInt raise Mp4Error
+pub fn ReadCursor::read_u32(Self) -> UInt raise Mp4Error
+pub fn ReadCursor::read_u64(Self) -> UInt64 raise Mp4Error
+pub fn ReadCursor::read_u8(Self) -> UInt raise Mp4Error
+pub fn ReadCursor::remaining(Self) -> Int
+pub fn ReadCursor::rewind_to(Self, Int) -> Unit raise Mp4Error
+pub fn ReadCursor::skip(Self, Int) -> Unit raise Mp4Error
+pub fn ReadCursor::sub_cursor(Self, Int) -> Self raise Mp4Error
+pub fn ReadCursor::with_config(Bytes, UInt64, ParseLimits) -> Self
+
+pub struct WriteCursor {
+  buffer : @buffer.Buffer
+}
+pub fn WriteCursor::new() -> Self
+pub fn WriteCursor::position(Self) -> Int
+pub fn WriteCursor::reset(Self) -> Unit
+pub fn WriteCursor::to_bytes(Self) -> Bytes
+pub fn WriteCursor::write_bytes(Self, Bytes) -> Unit
+pub fn WriteCursor::write_bytes_view(Self, BytesView) -> Unit
+pub fn WriteCursor::write_fixed_16_16(Self, FixedPointNumber) -> Unit
+pub fn WriteCursor::write_fixed_8_8(Self, FixedPointNumber) -> Unit
+pub fn WriteCursor::write_fourcc(Self, FourCC) -> Unit
+pub fn WriteCursor::write_i16(Self, Int) -> Unit
+pub fn WriteCursor::write_i32(Self, Int) -> Unit
+pub fn WriteCursor::write_i64(Self, Int64) -> Unit
+pub fn WriteCursor::write_i8(Self, Int) -> Unit
+pub fn WriteCursor::write_u16(Self, UInt) -> Unit
+pub fn WriteCursor::write_u24(Self, UInt) -> Unit
+pub fn WriteCursor::write_u32(Self, UInt) -> Unit
+pub fn WriteCursor::write_u64(Self, UInt64) -> Unit
+pub fn WriteCursor::write_u8(Self, UInt) -> Unit
 
 // Type aliases
 
