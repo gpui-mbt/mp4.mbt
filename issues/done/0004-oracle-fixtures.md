@@ -1,9 +1,9 @@
 # [P0 / M0] Rust oracle・fixture・正規化goldenを構築する
 
-Status: polished
+Status: done
 Model: DeepSeek V4.1 Flash Free
 Created: 2026-10-16
-Updated: 2026-10-16
+Updated: 2026-10-17
 Branch: test/0004-oracle-fixtures
 Priority: P0
 Milestone: M0
@@ -96,3 +96,5 @@ Rust 互換性を主観で判定せず、同じ入力 bytes → 両実装 → �
 - 未決事項: 正規化 schema の詳細、採用 fixture、manifest／golden のファイル形式、schema version の扱いは実装時に確定し、確定内容を本 Issue へ追記する。
 - 証跡ルール: Pass／Fail／Unverified を混同せず、oracle run ID・upstream SHA・fixture checksum・実行日時を記録する。PASS は実際に実行して一致した場合だけ記録する。
 - 2026-10-16: 本文を実装可能な形式へ整備し、実装に着手可能なため polished へ更新。
+- 2026-10-17: 実装に着手
+- 2026-10-17: tools/oracle（固定SHA 1282b704・Rust1.94.0・schema v1・64bit十進文字列）と tests/fixtures（manifest.json SHA256付き9件・golden 9件・regenerate_fixtures.mbtx）を追加。証跡: cargo test 2件PASS、sha256sum照合9件一致、oracle 2回実行で決定的（--checkで9件unchanged）、golden 9件生成。candidate側の比較実装は0013/0016で実施

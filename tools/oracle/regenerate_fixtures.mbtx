@@ -1,0 +1,135 @@
+// Regenerates and verifies the Rust oracle golden files for mp4.mbt.
+//
+// Usage (from the repository root):
+//   moon run tools/oracle/regenerate_fixtures.mbtx            # regenerate goldens
+//   moon run tools/oracle/regenerate_fixtures.mbtx -- --check # fail on any diff
+//
+// For each fixture listed in tests/fixtures/manifest.json the script:
+//   1. verifies the fixture SHA256 against the manifest,
+//   2. builds tools/oracle (pinned upstream revision),
+//   3. runs the oracle twice and requires identical output (determinism),
+//   4. writes tests/fixtures/golden/<name>.json (or fails on diff with --check).
+//
+// A missing fixture or oracle failure is reported as a failure; it is never
+// silently treated as "no difference".
+
+import {
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/shell",
+}
+
+fn json_object(value : Json) -> Map[String, Json] raise {
+  match value {
+    Object(fields) => fields
+    _ => fail("expected a JSON object")
+  }
+}
+
+fn field_string(fields : Map[String, Json], key : String) -> String raise {
+  match fields.get(key) {
+    Some(String(s)) => s
+    _ => fail("manifest field '\{key}' is missing or is not a string")
+  }
+}
+
+async fn main {
+  let args = @env.args()
+  let check_only = args.contains("--check")
+  let manifest_path = "tests/fixtures/manifest.json"
+  let manifest_data = try! @fs.read_file(manifest_path)
+  let manifest = manifest_data.json()
+  let fixtures_value = json_object(manifest).get("fixtures")
+  let fixtures = match fixtures_value {
+    Some(Array(items)) => items
+    _ => fail("manifest has no 'fixtures' array")
+  }
+  println(
+    "regenerating goldens for \{fixtures.length()} fixtures (check_only=\{check_only})",
+  )
+
+  // Build the oracle once.
+  let build = try! @shell.Cmd(
+    "cargo",
+    ["build", "--quiet"],
+    cwd="tools/oracle",
+  ).output()
+  if build.exit_code() != 0 {
+    fail("cargo build failed:\n\{build.stderr()}")
+  }
+
+  let failures : Array[String] = []
+  let mut regenerated = 0
+  let mut unchanged = 0
+  for fixture in fixtures {
+    let fields = json_object(fixture)
+    let name = field_string(fields, "name")
+    let path = field_string(fields, "path")
+    let expected_sha = field_string(fields, "sha256")
+    let golden_path = field_string(fields, "golden")
+
+    // 1. fixture integrity
+    let sha_out = try! @shell.Cmd("sha256sum", [path]).output()
+    if sha_out.exit_code() != 0 {
+      failures.push("\{name}: missing or unreadable fixture (\{path})")
+      continue
+    }
+    let actual_sha = match sha_out.stdout().split(" ").next() {
+      Some(v) => v.to_owned()
+      None => ""
+    }
+    if actual_sha != expected_sha {
+      failures.push(
+        "\{name}: sha256 mismatch (manifest=\{expected_sha}, actual=\{actual_sha})",
+      )
+      continue
+    }
+
+    // 3. deterministic oracle runs
+    let run1 = try! @shell.Cmd(
+      "tools/oracle/target/debug/mp4-oracle",
+      ["demux", path],
+    ).output()
+    if run1.exit_code() != 0 {
+      failures.push("\{name}: oracle failed:\n\{run1.stderr()}")
+      continue
+    }
+    let run2 = try! @shell.Cmd(
+      "tools/oracle/target/debug/mp4-oracle",
+      ["demux", path],
+    ).output()
+    if run1.stdout() != run2.stdout() {
+      failures.push("\{name}: oracle output is not deterministic")
+      continue
+    }
+
+    // 4. compare with the committed golden
+    let generated = run1.stdout()
+    let previous = match (try! @fs.exists(golden_path)) {
+      true => (try! @fs.read_file(golden_path)).text()
+      false => ""
+    }
+    if previous == generated {
+      unchanged += 1
+    } else if check_only {
+      failures.push(
+        "\{name}: golden differs from regenerated output (\{golden_path})",
+      )
+    } else {
+      try! @fs.write_file(golden_path, generated)
+      regenerated += 1
+    }
+  }
+
+  println(
+    "fixtures: \{fixtures.length()}, unchanged: \{unchanged}, written: \{regenerated}, failures: \{failures.length()}",
+  )
+  for failure in failures {
+    println("  FAIL \{failure}")
+  }
+  if failures.length() > 0 {
+    fail("golden regeneration reported \{failures.length()} failure(s)")
+  }
+}
