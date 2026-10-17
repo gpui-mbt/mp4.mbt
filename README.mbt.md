@@ -16,7 +16,7 @@ for the plan and current progress. Unsupported features are never described here
 - [x] M2: fragmented MP4 demux/mux (Rust-oracle interop UNVERIFIED)
 - [x] M3: standard MP4 mux (Rust-oracle interop UNVERIFIED)
 - [ ] M4: bitstream helpers, subtitles, Hybrid MP4
-- [ ] M5: WebCodecs demo, native inspector, fuzz, performance, release docs
+- [x] M5: WebCodecs demo, native inspector, fuzz, performance, release docs (browser/window E2E and timed baselines NOT_RUN)
 
 ## Scope and compatibility
 
