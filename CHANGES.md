@@ -6,6 +6,14 @@ versions (`M0`–`M5`); unreleased work is listed under `Unreleased`.
 
 ## Unreleased
 
+### Verified
+
+- Ran the pinned Rust oracle (23 tests, goldens unchanged), Node diff lab
+  (9/9 fixtures), browser dump/diff-lab E2E (20/20), Chrome WebCodecs
+  transcode E2E (3/3), 10k mutation run, drift rehearsal, and a single-host
+  benchmark. Results and the remaining NOT_RUN items are recorded in
+  `docs/verification.md`.
+
 ### Added
 
 - gpui.mbt Native MP4 Inspector (issue 0030): `native/inspector` separate

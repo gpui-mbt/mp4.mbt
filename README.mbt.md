@@ -121,9 +121,14 @@ sh web/build.sh
 # serve web/dist and open /transcode.html
 ```
 
-Browser E2E (WebCodecs + Playwright) is **NOT_RUN** in this environment;
-only the Node bundle smoke (`web/build.sh` + `webtranscode_create/finalize`) is
-verified.
+Browser E2E uses the installed Chrome/Chromium and Playwright:
+
+```bash
+PLAYWRIGHT_PATH=<dir> CHANNEL=chrome node web/e2e/transcode.mjs
+```
+
+The output MP4 is written to `/tmp/transcoded.mp4` (override with `OUT=`).
+Verification results are recorded in [`docs/verification.md`](docs/verification.md).
 
 ### Diff Lab — Rust/WASM vs MoonBit/JS
 

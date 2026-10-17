@@ -718,9 +718,18 @@ pub fn WebDumpSession::codec_config_json(self : WebDumpSession) -> Json {
     }
     let mut entry_type : Json = Json::null()
     let mut description : Json = Json::null()
+    let mut width : Json = Json(0)
+    let mut height : Json = Json(0)
     match entry {
       Some(value) => {
         entry_type = Json(value.box_type().to_string())
+        match value.video_resolution() {
+          Some((w, h)) => {
+            width = Json(w)
+            height = Json(h)
+          }
+          None => ()
+        }
         let raw : Bytes? = match value {
           @boxes.SampleEntry::Avc1(b) =>
             webdump_encode_bytes(fn() raise @bytes.Mp4Error {
@@ -758,6 +767,8 @@ pub fn WebDumpSession::codec_config_json(self : WebDumpSession) -> Json {
     items.push({
       "track_id": track.track_id,
       "sample_entry": entry_type,
+      "width": width,
+      "height": height,
       "description_b64": description,
     })
   }

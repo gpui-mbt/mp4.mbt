@@ -34,6 +34,7 @@ node web/run_lab.mjs
 moon run src/examples/demux --target native -- <fixture>
 moon run src/examples/fmp4 --target native -- <fixture> /tmp/fmp4-out
 moon run src/examples/mux --target native -- <fixture> /tmp/out.mp4
+PLAYWRIGHT_PATH=<dir> CHANNEL=chrome node web/e2e/transcode.mjs
 ```
 
 ## version / tag

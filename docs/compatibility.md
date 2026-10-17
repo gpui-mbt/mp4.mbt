@@ -10,7 +10,7 @@
 | 通常 MP4 demux | Implemented | Unit / oracle / fixture PASS | 0013 |
 | Native demux CLI | Implemented | CLI smoke PASS | 0014 |
 | Web Dump | Implemented | Node smoke PASS、Browser E2E は実環境依存 | 0015 |
-| Rust/WASM diff lab | Implemented | Node runner PASS、browser E2E は実環境依存 | 0016 |
+| Rust/WASM diff lab | Implemented | Node runner PASS、browser E2E PASS（Chrome 155） | 0016 |
 | fMP4 boxes | Implemented | Unit / roundtrip PASS、Rust oracle UNVERIFIED | 0017 |
 | fMP4 segment demux | Implemented | Unit / roundtrip PASS、Rust oracle UNVERIFIED | 0018 |
 | fMP4 file demux | Implemented | Unit / roundtrip PASS、Rust oracle UNVERIFIED | 0019 |
@@ -23,12 +23,12 @@
 | AV1/VP8/VP9 bitstream | Implemented | Unit PASS、Rust oracle UNVERIFIED | 0026 |
 | Hybrid MP4 positions | Implemented | Unit PASS、実ファイル E2E は未実行 | 0027 |
 | 字幕 sample entry | Implemented | Unit / roundtrip PASS | 0028 |
-| WebCodecs transcode | Implemented | Node bundle smoke PASS、browser E2E NOT_RUN | 0029 |
-| Native gpui Inspector | Implemented（host）/ Partial（picker・大容量 read） | check PASS、window E2E NOT_RUN | 0030 |
-| fuzz / PBT | Partial | fast mutation suite PASS、長時間 fuzz NOT_RUN | 0031 |
-| 性能 baseline | Partial | read/I/O 回数の smoke のみ、時間・RSS NOT_RUN | 0032 |
+| WebCodecs transcode | Implemented | Node smoke + Chrome E2E PASS、出力を MoonBit/Rust で再解析 | 0029 |
+| Native gpui Inspector | Implemented（host）/ Partial（picker・大容量 read） | check PASS、window E2E NOT_RUN（headless） | 0030 |
+| fuzz / PBT | Partial | mutation suite + 10k run PASS、長時間 fuzz NOT_RUN | 0031 |
+| 性能 baseline | Partial | 単一ホストで read/I/O・時間・RSS を採取、回帰閾値は未設定 | 0032 |
 | 公開文書 | Implemented | 本 PR | 0033 |
-| 上流追従監査 | Partial | 手順・テンプレート、リハーサル未実行 | 0034 |
+| 上流追従監査 | Partial | 手順・テンプレート + リハーサル PASS | 0034 |
 
 - 「Partial」は実装または検証の一部が未完了であることを示す。未実行を PASS と
   して扱わない。

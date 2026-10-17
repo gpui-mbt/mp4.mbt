@@ -81,7 +81,7 @@ async function samplePayload(file, offset, size) {
   return new Uint8Array(await file.slice(start, start + size).arrayBuffer());
 }
 
-async function collectDecoded(config, samples, file, isCancelled) {
+async function collectDecoded(config, samples, timescale, file, isCancelled) {
   const frames = [];
   let decodeError = null;
   const decoder = new VideoDecoder({
@@ -94,8 +94,8 @@ async function collectDecoded(config, samples, file, isCancelled) {
     const data = await samplePayload(file, sample.data_offset, sample.data_size);
     decoder.decode(new EncodedVideoChunk({
       type: sample.keyframe ? "key" : "delta",
-      timestamp: Math.round(Number(BigInt(sample.timestamp)) * 1e6 / config.timescale),
-      duration: Math.round(sample.duration * 1e6 / config.timescale),
+      timestamp: Math.round(Number(BigInt(sample.timestamp)) * 1e6 / timescale),
+      duration: Math.round(sample.duration * 1e6 / timescale),
       data,
     }));
   }
@@ -174,12 +174,12 @@ async function transcode(file) {
     }
     const description = b64ToBytes(trackConfig.description_b64);
     const samples = JSON.parse(dump.mp4dump_samples_json(session, 0, 1000000));
-    if (!samples.items || samples.items.length === 0) throw new Error("サンプルがありません");
+    if (!samples.samples || samples.samples.length === 0) throw new Error("サンプルがありません");
     const decodeConfig = {
       codec: avcCodec(description),
       description,
-      codedWidth: 0,
-      codedHeight: 0,
+      codedWidth: Number(trackConfig.width) || 0,
+      codedHeight: Number(trackConfig.height) || 0,
       optimizeForLatency: true,
     };
     const support = await VideoDecoder.isConfigSupported(decodeConfig);
@@ -188,7 +188,13 @@ async function transcode(file) {
       throw new Error("入力 H.264 decode 非対応");
     }
     progress.textContent = "デコード中…";
-    const frames = await collectDecoded(decodeConfig, samples.items, file, isCancelledFinal);
+    const frames = await collectDecoded(
+      decodeConfig,
+      samples.samples,
+      Number(videoTrack.timescale),
+      file,
+      isCancelledFinal,
+    );
     if (frames.length === 0) throw new Error("デコード結果が空です");
     const width = frames[0].displayWidth;
     const height = frames[0].displayHeight;
@@ -206,7 +212,7 @@ async function transcode(file) {
         chunk.data,
         Math.max(1, Math.round((chunk.duration || 1) * 1_000_000 / 1_000_000)),
         chunk.key,
-        null,
+        undefined,
       );
       const state = tx.webtranscode_state(muxer);
       if (state === "error") throw new Error(tx.webtranscode_error_json(muxer));
