@@ -22,7 +22,7 @@ Google Chrome 155.0.8059.84 for browser E2E.
 | Browser E2E (dump + diff lab) | `PLAYWRIGHT_PATH=/tmp/pw node web/e2e/e2e.mjs` | 20/20 |
 | WebCodecs E2E (Chrome) | `PLAYWRIGHT_PATH=/tmp/pw CHANNEL=chrome node web/e2e/transcode.mjs` | 3/3, output MP4 written |
 | Transcoded output | MoonBit demux + Rust oracle | tracks/samples/offset match |
-| Long mutation run | `moon run src/examples/fuzz --target native -- 10000` | 10,000 iterations, no panic |
+| Long mutation run | `moon run src/examples/fuzz --target native -- 100000` | 100,000 iterations, no panic |
 | Drift rehearsal | `python3 tools/upstream-drift/audit.py <old> <new>` | contract delta detected |
 | Benchmark | `_build/native/debug/build/examples/bench/bench.exe <fixture> 50` | 250 reads, 45,950 I/O bytes, 0.30 s, 2.8 MB peak RSS |
 
@@ -41,5 +41,5 @@ Notes:
 | --- | --- |
 
 | Native inspector file picker | Implemented with `--pick` via the macOS file dialog; not exercised in this non-interactive session. |
-| CI-run browser E2E | Playwright browsers are not downloaded in CI; the E2E is a local/manual check. |
+| CI-run browser E2E | Workflow added (`.github/workflows/browser-e2e.yml`); not executed on GitHub from this session. |
 | Performance regression thresholds | Only a single-machine baseline was captured. |

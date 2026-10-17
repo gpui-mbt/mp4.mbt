@@ -103,3 +103,11 @@ runners are not available:
 limited output directory `web/dist` (never the whole repository). Until the
 web demo (issue 0015) exists, the workflow logs an explicit skip message and
 deploys nothing.
+
+
+## Browser E2E workflow
+
+`.github/workflows/browser-e2e.yml` (manual / web changes) installs Playwright
+Chromium, builds `web/dist`, runs `web/e2e/e2e.mjs` (dump + diff lab) and
+`web/e2e/transcode.mjs` (WebCodecs; codec-disabled path is accepted when the
+runner's Chromium has no H.264), and uploads the output MP4 plus lab reports.

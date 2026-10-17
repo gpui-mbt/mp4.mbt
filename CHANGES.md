@@ -6,6 +6,12 @@ versions (`M0`–`M5`); unreleased work is listed under `Unreleased`.
 
 ## Unreleased
 
+### Added
+
+- Browser E2E workflow (`.github/workflows/browser-e2e.yml`) for dump,
+  diff-lab and WebCodecs transcode; native inspector range reads and
+  `--pick`; 100k mutation run recorded in `docs/verification.md`.
+
 ### Verified
 
 - Ran the pinned Rust oracle (23 tests, goldens unchanged), Node diff lab

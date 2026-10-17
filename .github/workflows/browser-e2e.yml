@@ -1,0 +1,58 @@
+name: browser-e2e
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'web/**'
+      - 'src/webdump/**'
+      - 'src/webtranscode/**'
+      - 'src/difflab/**'
+      - 'src/demux_report/**'
+      - '.github/workflows/browser-e2e.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Playwright (Chromium)
+        run: |
+          npm init -y
+          npm install playwright --no-audit --no-fund
+          npx playwright install --with-deps chromium
+      - name: Cache cargo for the Rust/WASM diff oracle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-${{ runner.os }}-${{ hashFiles('tools/lab-oracle/Cargo.lock') }}
+          restore-keys: cargo-${{ runner.os }}-
+      - name: Build web bundle and Rust/WASM oracle
+        run: sh web/build.sh
+      - name: Dump + diff-lab E2E
+        run: PLAYWRIGHT_PATH="$PWD" node web/e2e/e2e.mjs
+      - name: WebCodecs transcode E2E
+        run: PLAYWRIGHT_PATH="$PWD" node web/e2e/transcode.mjs
+      - name: Upload E2E artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-e2e
+          path: |
+            /tmp/transcoded.mp4
+            web/lab-out/
+          if-no-files-found: warn
