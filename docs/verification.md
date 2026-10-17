@@ -25,6 +25,7 @@ Google Chrome 155.0.8059.84 for browser E2E.
 | Long mutation run | `moon run src/examples/fuzz --target native -- 100000` | 100,000 iterations, no panic |
 | Drift rehearsal | `python3 tools/upstream-drift/audit.py <old> <new>` | contract delta detected |
 | Benchmark | `_build/native/debug/build/examples/bench/bench.exe <fixture> 50` | 250 reads, 45,950 I/O bytes, 0.30 s, 2.8 MB peak RSS |
+| No-`mdat`-payload regression | `moon test --target js src/demux` | PASS (read/byte bounds) |
 
 Notes:
 

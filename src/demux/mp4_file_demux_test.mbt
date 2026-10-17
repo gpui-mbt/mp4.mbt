@@ -132,3 +132,40 @@ test "next_sample walks every sample once then returns None" {
     _ => abort("expected the sample stream to stay exhausted")
   }
 }
+
+///|
+test "demux reads headers and moov without mdat payload" {
+  let input = demux_case_named("fixture:black-h264-video.mp4").input
+  let demuxer = @demux.Mp4FileDemuxer::new()
+  let mut reads = 0
+  let mut bytes = 0UL
+  while demuxer.required_input() is Some(required) {
+    let start = required.position.to_int()
+    let end = match required.size {
+      Some(size) => {
+        let e = start + size.to_int()
+        if e > input.length() {
+          input.length()
+        } else {
+          e
+        }
+      }
+      None => input.length()
+    }
+    let chunk = if start >= input.length() {
+      b""
+    } else {
+      @bytes.ReadCursor::from_view(input[start:end], 0UL).read_remaining() catch {
+        _ => b""
+      }
+    }
+    reads = reads + 1
+    bytes = bytes + chunk.length().to_uint64()
+    demuxer.handle_input(@demux.Input::{
+      position: required.position,
+      data: chunk[:],
+    })
+  }
+  inspect(reads <= 10, content="true")
+  inspect(bytes < input.length().to_uint64(), content="true")
+}

@@ -22,7 +22,9 @@ track 数、sample 数を JSON で返す。経過時間と peak RSS は `/usr/bi
 
 ## 回帰条件
 
-- `mdat` の payload を通常 demux が読まない（既存の read log E2E）。
+- `mdat` の payload を通常 demux が読まない。`src/demux/mp4_file_demux_test.mbt` の
+  "demux reads headers and moov without mdat payload" が read 回数と総 I/O バイト数を
+  固定する。
 - UI が巨大 table を全件描画しない（virtualized window）。
 - range read の再試行回数が有限である（`required_input` のループ回数）。
 - mux が大きい `mdat` を複製しない（API が payload を返さない）。
