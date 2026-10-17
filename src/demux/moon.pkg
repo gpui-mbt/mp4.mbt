@@ -6,4 +6,5 @@ import {
 
 import {
   "gpui-mbt/mp4/bytes",
+  "gpui-mbt/mp4/mux",
 } for "test"

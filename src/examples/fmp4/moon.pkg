@@ -1,0 +1,14 @@
+import {
+  "gpui-mbt/mp4/bytes",
+  "gpui-mbt/mp4/demux" @mp4_demux,
+  "gpui-mbt/mp4/mux" @mp4_mux,
+  "moonbitlang/core/env",
+  "moonbitlang/core/string",
+  "moonbitlang/async",
+  "moonbitlang/async/stdio",
+  "moonbitlang/async/fs",
+}
+
+supported_targets = "+native"
+
+pkgtype(kind: "executable")

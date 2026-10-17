@@ -1,9 +1,8 @@
 ///|
 /// MP4 のトップレベルに位置するボックス群（上流 `RootBox`）。
 ///
-/// 現時点では `free` / `mdat` / `moov` / 未知種別を型付きで扱う。`moof` / `mfra` /
-/// `sidx` の variant は後続 Issue（0017）で追加する。それまでの間、これらは
-/// [`RootBox::Unknown`] として保持される。
+/// `ftyp` / `free` / `mdat` / `moov` / `moof` / `sidx` / `mfra` と未知種別を
+/// 型付きで扱う（Issue 0017 で fMP4 の variant を追加）。
 ///
 /// ```mbt check
 /// test {
@@ -23,12 +22,20 @@
 /// }
 /// ```
 pub(all) enum RootBox {
+  /// `ftyp` ボックス（ファイルブランド）
+  Ftyp(FtypBox)
   /// `free` ボックス（空き領域埋め）
   Free(FreeBox)
   /// `mdat` ボックス（メディアデータ本体）
   Mdat(MdatBox)
   /// `moov` ボックス（movie 全体のメタデータとトラック群）
   Moov(MoovBox)
+  /// `moof` ボックス（fMP4 のメディアセグメントヘッダー）
+  Moof(MoofBox)
+  /// `sidx` ボックス（セグメントインデックス）
+  Sidx(SidxBox)
+  /// `mfra` ボックス（ランダムアクセスインデックス）
+  Mfra(MfraBox)
   /// 上記以外のボックス（未知種別の受け皿）
   Unknown(UnknownBox)
 } derive(Debug)
@@ -57,6 +64,18 @@ pub impl @bytes.Decode for RootBox with fn decode(cursor : @bytes.ReadCursor) ->
   } else if box_type.as_bytes() == b"moov" {
     let inner : MoovBox = @bytes.decode_from(cursor)
     RootBox::Moov(inner)
+  } else if box_type.as_bytes() == b"ftyp" {
+    let inner : FtypBox = @bytes.decode_from(cursor)
+    RootBox::Ftyp(inner)
+  } else if box_type.as_bytes() == b"moof" {
+    let inner : MoofBox = @bytes.decode_from(cursor)
+    RootBox::Moof(inner)
+  } else if box_type.as_bytes() == b"sidx" {
+    let inner : SidxBox = @bytes.decode_from(cursor)
+    RootBox::Sidx(inner)
+  } else if box_type.as_bytes() == b"mfra" {
+    let inner : MfraBox = @bytes.decode_from(cursor)
+    RootBox::Mfra(inner)
   } else {
     RootBox::Unknown(UnknownBox::decode_top_level(cursor))
   }
@@ -77,8 +96,12 @@ pub impl @bytes.Encode for RootBox with fn encode(
   cursor : @bytes.WriteCursor,
 ) -> Unit raise @bytes.Mp4Error {
   match self {
+    Ftyp(b) => @bytes.Encode::encode(b, cursor)
     Free(b) => @bytes.Encode::encode(b, cursor)
     Moov(b) => @bytes.Encode::encode(b, cursor)
+    Moof(b) => @bytes.Encode::encode(b, cursor)
+    Sidx(b) => @bytes.Encode::encode(b, cursor)
+    Mfra(b) => @bytes.Encode::encode(b, cursor)
     Unknown(b) => @bytes.Encode::encode(b, cursor)
     Mdat(_) =>
       raise @bytes.Mp4Error::unsupported(
@@ -93,9 +116,13 @@ pub extend RootBox with @bytes.Encode::{encode}
 ///|
 pub impl @box.BaseBox for RootBox with fn box_type(self) {
   match self {
+    Ftyp(b) => @box.BaseBox::box_type(b)
     Free(b) => @box.BaseBox::box_type(b)
     Mdat(b) => @box.BaseBox::box_type(b)
     Moov(b) => @box.BaseBox::box_type(b)
+    Moof(b) => @box.BaseBox::box_type(b)
+    Sidx(b) => @box.BaseBox::box_type(b)
+    Mfra(b) => @box.BaseBox::box_type(b)
     Unknown(b) => @box.BaseBox::box_type(b)
   }
 }
@@ -113,6 +140,8 @@ pub impl @box.BaseBox for RootBox with fn is_unknown_box(self) {
 pub impl @box.BaseBox for RootBox with fn children(self) {
   match self {
     Moov(b) => @box.BaseBox::children(b)
+    Moof(b) => @box.BaseBox::children(b)
+    Mfra(b) => @box.BaseBox::children(b)
     _ => {
       let empty : Array[&@box.BaseBox] = []
       empty

@@ -13,8 +13,8 @@ for the plan and current progress. Unsupported features are never described here
 
 - [x] M0: scaffold, CI, Rust oracle and fixtures
 - [ ] M1: boxes, read-only MP4 demux, Native CLI, Web dump, Rust diff lab
-- [ ] M2: fragmented MP4 demux/mux
-- [ ] M3: standard MP4 mux
+- [x] M2: fragmented MP4 demux/mux (Rust-oracle interop UNVERIFIED)
+- [x] M3: standard MP4 mux (Rust-oracle interop UNVERIFIED)
 - [ ] M4: bitstream helpers, subtitles, Hybrid MP4
 - [ ] M5: WebCodecs demo, native inspector, fuzz, performance, release docs
 

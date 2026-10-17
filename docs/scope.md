@@ -49,10 +49,10 @@
 | MP4/fMP4 file kind 検出 | `Mp4FileKindDetector` | Implemented（0012） | Unit / oracle / fixture |
 | 通常 MP4 file demux | `Mp4FileDemuxer` | Implemented（0013） | Unit / oracle / fixture |
 | Native demux CLI | `examples/demux.rs` 相当（`src/examples/demux`） | Implemented（0014） | Unit / fixture E2E / CI smoke |
-| fMP4 segment demux | `Fmp4SegmentDemuxer` | Not started | Unit / oracle |
-| fMP4 file demux | `Fmp4FileDemuxer` | Not started | Unit / oracle |
-| 通常 MP4 file mux | `Mp4FileMuxer` | Not started | Unit / interop |
-| fMP4 segment mux | `Fmp4SegmentMuxer` | Not started | Unit / interop |
+| fMP4 segment demux | `Fmp4SegmentDemuxer` | Implemented（0018） | Unit / roundtrip（Rust oracle UNVERIFIED） |
+| fMP4 file demux | `Fmp4FileDemuxer` | Implemented（0019） | Unit / roundtrip（Rust oracle UNVERIFIED） |
+| 通常 MP4 file mux | `Mp4FileMuxer` | Implemented（0022） | Unit / roundtrip（Rust interop UNVERIFIED） |
+| fMP4 segment mux | `Fmp4SegmentMuxer` | Implemented（0020） | Unit / roundtrip（Rust interop UNVERIFIED） |
 | Box tree / box 単体 | `boxes` | Partial（box envelope 0006、ルート box と tree 走査 0007、moov 木と時刻型 0008、stbl table 群 0009） | Unit / wire 往復 / oracle |
 | sample table（`stbl`）と `SampleTableAccessor` | `boxes_moov_tree` / `auxiliary` | Implemented（0009） | Unit / wire 往復 / oracle / fixture |
 | video/audio sample entry | `boxes_sample_entry` / `descriptors` | Implemented（0010。字幕 entry は 0028 まで `Unknown` 分類） | Unit / wire 往復 / oracle / fixture |

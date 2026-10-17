@@ -102,7 +102,7 @@ Rust oracle is a *separate executable* that reads the same fixtures.
 
 **最短の実行可能な read-only 縦スライス:** `0001→0002→0004→0005→0006→0007→0008→0009→0010→0013→0014→0015`。並列に `0003`（CI）と `0012`（kind detector）、続いて `0016`（Rust比）を進める。最初から全コーデック・映像表示・全 mux を同時並行で着手しない。
 
-各 Issue は 1 件 1 PR 相当を基本とし、大きな [0009](../done/0009-sample-tables.md)／[0010](./0010-sample-entries.md)／[0022](./0022-mp4-file-mux.md) は必要ならファイル単位・box 群単位でさらに分割してよい。ただし分割後も親の受入条件を残す。**CI Green かつ独立レビュー Approve 相当／P1 なしをマージの標準条件**とし、評価対象 commit を明示する。
+各 Issue は 1 件 1 PR 相当を基本とし、大きな [0009](../done/0009-sample-tables.md)／[0010](./0010-sample-entries.md)／[0022](../done/0022-mp4-file-mux.md) は必要ならファイル単位・box 群単位でさらに分割してよい。ただし分割後も親の受入条件を残す。**CI Green かつ独立レビュー Approve 相当／P1 なしをマージの標準条件**とし、評価対象 commit を明示する。
 
 ### テスト・互換性判定
 
@@ -185,16 +185,16 @@ M1 では**動画そのものの再生や変換**を UI に表示できなくて
 
 #### M2 – Fragmented MP4
 
-- [ ] [0017 moof/traf/tfhd/trun/tfdt/mvexとsidx/mfraを移植する](./0017-fmp4-boxes.md) — P1 / deps: 0008, 0009
-- [ ] [0018 初期化＋メディアセグメントのSans I/O demuxerを作る](./0018-fmp4-segment-demux.md) — P1 / deps: 0010, 0017
-- [ ] [0019 fMP4ファイル全体のincremental demuxerを作る](./0019-fmp4-file-demux.md) — P1 / deps: 0012, 0017, 0018
-- [ ] [0020 Fmp4SegmentMuxerのinit/media生成とオフセット管理](./0020-fmp4-segment-mux.md) — P1 / deps: 0010, 0017
-- [ ] [0021 上流examples/fmp4.rsのMux/Demux統合デモを移植する](./0021-fmp4-example.md) — P1 / deps: 0018, 0020
+- [x] [0017 moof/traf/tfhd/trun/tfdt/mvexとsidx/mfraを移植する](../done/0017-fmp4-boxes.md) — P1 / deps: 0008, 0009 / 検証: MoonBit unit PASS, Rust oracle UNVERIFIED
+- [x] [0018 初期化＋メディアセグメントのSans I/O demuxerを作る](../done/0018-fmp4-segment-demux.md) — P1 / deps: 0010, 0017 / 検証: unit/roundtrip PASS, Rust oracle UNVERIFIED
+- [x] [0019 fMP4ファイル全体のincremental demuxerを作る](../done/0019-fmp4-file-demux.md) — P1 / deps: 0012, 0017, 0018 / 検証: unit/roundtrip PASS, Rust oracle UNVERIFIED
+- [x] [0020 Fmp4SegmentMuxerのinit/media生成とオフセット管理](../done/0020-fmp4-segment-mux.md) — P1 / deps: 0010, 0017 / 検証: unit/roundtrip PASS, Rust oracle UNVERIFIED
+- [x] [0021 上流examples/fmp4.rsのMux/Demux統合デモを移植する](../done/0021-fmp4-example.md) — P1 / deps: 0018, 0020 / 検証: native manual run PASS
 
 #### M3 – Standard MP4 mux
 
-- [ ] [0022 通常MP4 FileMuxer・追記・finalizeの移植](./0022-mp4-file-mux.md) — P1 / deps: 0009, 0010
-- [ ] [0023 通常MP4書込・roundtrip CLIサンプルを作る](./0023-mp4-mux-example.md) — P1 / deps: 0013, 0022
+- [x] [0022 通常MP4 FileMuxer・追記・finalizeの移植](../done/0022-mp4-file-mux.md) — P1 / deps: 0009, 0010 / 検証: unit/roundtrip PASS, Rust oracle UNVERIFIED
+- [x] [0023 通常MP4書込・roundtrip CLIサンプルを作る](../done/0023-mp4-mux-example.md) — P1 / deps: 0013, 0022 / 検証: native manual run PASS
 
 #### M4 – Bitstream helpers / subtitles / Hybrid
 

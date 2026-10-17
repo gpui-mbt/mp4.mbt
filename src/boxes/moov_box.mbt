@@ -2,9 +2,8 @@
 /// [ISO/IEC 14496-12] MovieBox（`moov`）(親: トップレベル)。
 ///
 /// movie 全体のメタデータ（`mvhd`）とトラック群（`trak`）を保持する。上流
-/// `MoovBox` に対応する。上流が持つ `mvex_box` は本 Issue では型付けせず、
-/// `mvex` 以下のボックスは [`UnknownBox`] として `unknown_boxes` に保持する
-/// （Issue 0017 で対応する）。
+/// `MoovBox` に対応する。`mvex` 以下は Issue 0017 で型付きの [`MvexBox`] として
+/// 保持する。
 ///
 /// ```mbt check
 /// test {
@@ -38,8 +37,9 @@ pub struct MoovBox {
   ///
   /// `trak` は重複してもすべて型付きで保持される（上流と同じ）。
   trak_boxes : Array[TrakBox]
-  /// 上記のいずれにも該当しなかった子ボックス群（未知の box_type を含む。
-  /// 本 Issue では `mvex` もここに入る）
+  /// `mvex` ボックス（fMP4 の初期化セグメントでのみ存在する）
+  mvex_box : MvexBox?
+  /// 上記のいずれにも該当しなかった子ボックス群（未知の box_type を含む）
   unknown_boxes : Array[UnknownBox]
 } derive(Eq, Hash, Debug)
 
@@ -59,7 +59,24 @@ pub fn MoovBox::new(
   trak_boxes : Array[TrakBox],
   unknown_boxes : Array[UnknownBox],
 ) -> MoovBox {
-  { mvhd_box, trak_boxes, unknown_boxes, }
+  { mvhd_box, trak_boxes, mvex_box: None, unknown_boxes, }
+}
+
+///|
+/// `mvex` を持つ `moov` を作成する。
+pub fn MoovBox::with_mvex(
+  mvhd_box : MvhdBox,
+  trak_boxes : Array[TrakBox],
+  mvex_box : MvexBox,
+  unknown_boxes : Array[UnknownBox],
+) -> MoovBox {
+  { mvhd_box, trak_boxes, mvex_box: Some(mvex_box), unknown_boxes, }
+}
+
+///|
+/// `mvex` ボックスを返す（存在しない場合は `None`）。
+pub fn MoovBox::mvex_box(self : MoovBox) -> MvexBox? {
+  self.mvex_box
 }
 
 ///|
@@ -78,6 +95,7 @@ pub impl @bytes.Decode for MoovBox with fn decode(cursor : @bytes.ReadCursor) ->
     let payload_cursor = payload_cursor_of(cursor, payload)
     let mut mvhd_box : MvhdBox? = None
     let trak_boxes : Array[TrakBox] = []
+    let mut mvex_box : MvexBox? = None
     let unknown_boxes : Array[UnknownBox] = []
     while !payload_cursor.is_empty() {
       let child_type = peek_box_type(payload_cursor)
@@ -85,6 +103,8 @@ pub impl @bytes.Decode for MoovBox with fn decode(cursor : @bytes.ReadCursor) ->
         mvhd_box = Some(@bytes.decode_from(payload_cursor))
       } else if child_type == trak_type() {
         trak_boxes.push(@bytes.decode_from(payload_cursor))
+      } else if child_type == mvex_type() && mvex_box is None {
+        mvex_box = Some(@bytes.decode_from(payload_cursor))
       } else {
         unknown_boxes.push(@bytes.decode_from(payload_cursor))
       }
@@ -92,6 +112,7 @@ pub impl @bytes.Decode for MoovBox with fn decode(cursor : @bytes.ReadCursor) ->
     {
       mvhd_box: check_mandatory_box(mvhd_box, "mvhd", "moov"),
       trak_boxes,
+      mvex_box,
       unknown_boxes,
     }
   })
@@ -115,6 +136,10 @@ pub impl @bytes.Encode for MoovBox with fn encode(
     for trak in self.trak_boxes {
       @bytes.Encode::encode(trak, payload)
     }
+    match self.mvex_box {
+      Some(mvex) => @bytes.Encode::encode(mvex, payload)
+      None => ()
+    }
     for unknown in self.unknown_boxes {
       @bytes.Encode::encode(unknown, payload)
     }
@@ -136,6 +161,10 @@ pub impl @box.BaseBox for MoovBox with fn children(self) {
   children.push(self.mvhd_box)
   for trak in self.trak_boxes {
     children.push(trak)
+  }
+  match self.mvex_box {
+    Some(mvex) => children.push(mvex)
+    None => ()
   }
   for unknown in self.unknown_boxes {
     children.push(unknown)

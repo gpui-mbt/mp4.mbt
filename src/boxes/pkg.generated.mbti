@@ -10,6 +10,34 @@ import {
 // Values
 pub const DEFAULT_MAX_BOX_TREE_NODES : Int = 65536
 
+pub const TFHD_FLAG_BASE_DATA_OFFSET_PRESENT : UInt = 0x000001
+
+pub const TFHD_FLAG_DEFAULT_BASE_IS_MOOF : UInt = 0x020000
+
+pub const TFHD_FLAG_DEFAULT_SAMPLE_DURATION_PRESENT : UInt = 0x000008
+
+pub const TFHD_FLAG_DEFAULT_SAMPLE_FLAGS_PRESENT : UInt = 0x000020
+
+pub const TFHD_FLAG_DEFAULT_SAMPLE_SIZE_PRESENT : UInt = 0x000010
+
+pub const TFHD_FLAG_DURATION_IS_EMPTY : UInt = 0x010000
+
+pub const TFHD_FLAG_SAMPLE_DESCRIPTION_INDEX_PRESENT : UInt = 0x000002
+
+pub const TRUN_FLAG_DATA_OFFSET_PRESENT : UInt = 0x000001
+
+pub const TRUN_FLAG_FIRST_SAMPLE_FLAGS_PRESENT : UInt = 0x000004
+
+pub const TRUN_FLAG_SAMPLE_COMPOSITION_TIME_OFFSETS_PRESENT : UInt = 0x000800
+
+pub const TRUN_FLAG_SAMPLE_DURATION_PRESENT : UInt = 0x000100
+
+pub const TRUN_FLAG_SAMPLE_FLAGS_PRESENT : UInt = 0x000400
+
+pub const TRUN_FLAG_SAMPLE_SIZE_PRESENT : UInt = 0x000200
+
+pub const TRUN_MAX_SAMPLES_WITHOUT_DATA : UInt = 16777216
+
 pub fn build_box_tree(@bytes.ReadCursor, options? : BoxTreeOptions) -> Array[BoxNode] raise @bytes.Mp4Error
 
 pub fn flatten_box_tree(Array[BoxNode]) -> Array[(Int, BoxNode)]
@@ -751,6 +779,88 @@ pub impl @box.BaseBox for MediaHeader
 pub impl @bytes.Decode for MediaHeader
 pub impl @bytes.Encode for MediaHeader
 
+pub struct MehdBox {
+  fragment_duration : UInt64
+} derive(Eq, Hash, @debug.Debug)
+pub fn MehdBox::box_type(Self) -> @bytes.BoxType
+pub fn MehdBox::children(Self) -> Array[&@box.BaseBox]
+pub fn MehdBox::decode(@bytes.ReadCursor) -> Self raise @bytes.Mp4Error
+pub fn MehdBox::encode(Self, @bytes.WriteCursor) -> Unit raise @bytes.Mp4Error
+pub fn MehdBox::equal(Self, Self) -> Bool
+pub fn MehdBox::full_box_flags(Self) -> @box.FullBoxFlags
+pub fn MehdBox::full_box_version(Self) -> UInt
+pub fn MehdBox::hash(Self) -> Int
+pub fn MehdBox::hash_combine(Self, Hasher) -> Unit
+pub fn MehdBox::is_unknown_box(Self) -> Bool
+pub fn MehdBox::new(UInt64) -> Self
+pub fn MehdBox::not_equal(Self, Self) -> Bool
+pub fn MehdBox::to_repr(Self) -> @debug.Repr
+pub impl @box.BaseBox for MehdBox
+pub impl @box.FullBox for MehdBox
+pub impl @bytes.Decode for MehdBox
+pub impl @bytes.Encode for MehdBox
+
+pub struct MfhdBox {
+  sequence_number : UInt
+} derive(Eq, Hash, @debug.Debug)
+pub fn MfhdBox::box_type(Self) -> @bytes.BoxType
+pub fn MfhdBox::children(Self) -> Array[&@box.BaseBox]
+pub fn MfhdBox::decode(@bytes.ReadCursor) -> Self raise @bytes.Mp4Error
+pub fn MfhdBox::encode(Self, @bytes.WriteCursor) -> Unit raise @bytes.Mp4Error
+pub fn MfhdBox::equal(Self, Self) -> Bool
+pub fn MfhdBox::full_box_flags(Self) -> @box.FullBoxFlags
+pub fn MfhdBox::full_box_version(Self) -> UInt
+pub fn MfhdBox::hash(Self) -> Int
+pub fn MfhdBox::hash_combine(Self, Hasher) -> Unit
+pub fn MfhdBox::is_unknown_box(Self) -> Bool
+pub fn MfhdBox::new(UInt) -> Self
+pub fn MfhdBox::not_equal(Self, Self) -> Bool
+pub fn MfhdBox::to_repr(Self) -> @debug.Repr
+pub impl @box.BaseBox for MfhdBox
+pub impl @box.FullBox for MfhdBox
+pub impl @bytes.Decode for MfhdBox
+pub impl @bytes.Encode for MfhdBox
+
+pub struct MfraBox {
+  tfra_boxes : Array[TfraBox]
+  mfro_box : MfroBox
+} derive(Eq, Hash, @debug.Debug)
+pub fn MfraBox::box_type(Self) -> @bytes.BoxType
+pub fn MfraBox::children(Self) -> Array[&@box.BaseBox]
+pub fn MfraBox::decode(@bytes.ReadCursor) -> Self raise @bytes.Mp4Error
+pub fn MfraBox::encode(Self, @bytes.WriteCursor) -> Unit raise @bytes.Mp4Error
+pub fn MfraBox::equal(Self, Self) -> Bool
+pub fn MfraBox::hash(Self) -> Int
+pub fn MfraBox::hash_combine(Self, Hasher) -> Unit
+pub fn MfraBox::is_unknown_box(Self) -> Bool
+pub fn MfraBox::new(Array[TfraBox], MfroBox) -> Self
+pub fn MfraBox::not_equal(Self, Self) -> Bool
+pub fn MfraBox::to_repr(Self) -> @debug.Repr
+pub impl @box.BaseBox for MfraBox
+pub impl @bytes.Decode for MfraBox
+pub impl @bytes.Encode for MfraBox
+
+pub struct MfroBox {
+  size : UInt
+} derive(Eq, Hash, @debug.Debug)
+pub fn MfroBox::box_type(Self) -> @bytes.BoxType
+pub fn MfroBox::children(Self) -> Array[&@box.BaseBox]
+pub fn MfroBox::decode(@bytes.ReadCursor) -> Self raise @bytes.Mp4Error
+pub fn MfroBox::encode(Self, @bytes.WriteCursor) -> Unit raise @bytes.Mp4Error
+pub fn MfroBox::equal(Self, Self) -> Bool
+pub fn MfroBox::full_box_flags(Self) -> @box.FullBoxFlags
+pub fn MfroBox::full_box_version(Self) -> UInt
+pub fn MfroBox::hash(Self) -> Int
+pub fn MfroBox::hash_combine(Self, Hasher) -> Unit
+pub fn MfroBox::is_unknown_box(Self) -> Bool
+pub fn MfroBox::new(UInt) -> Self
+pub fn MfroBox::not_equal(Self, Self) -> Bool
+pub fn MfroBox::to_repr(Self) -> @debug.Repr
+pub impl @box.BaseBox for MfroBox
+pub impl @box.FullBox for MfroBox
+pub impl @bytes.Decode for MfroBox
+pub impl @bytes.Encode for MfroBox
+
 pub struct MinfBox {
   media_header : MediaHeader?
   dinf_box : DinfBox
@@ -772,9 +882,30 @@ pub impl @box.BaseBox for MinfBox
 pub impl @bytes.Decode for MinfBox
 pub impl @bytes.Encode for MinfBox
 
+pub struct MoofBox {
+  mfhd_box : MfhdBox
+  traf_boxes : Array[TrafBox]
+  unknown_boxes : Array[UnknownBox]
+} derive(Eq, Hash, @debug.Debug)
+pub fn MoofBox::box_type(Self) -> @bytes.BoxType
+pub fn MoofBox::children(Self) -> Array[&@box.BaseBox]
+pub fn MoofBox::decode(@bytes.ReadCursor) -> Self raise @bytes.Mp4Error
+pub fn MoofBox::encode(Self, @bytes.WriteCursor) -> Unit raise @bytes.Mp4Error
+pub fn MoofBox::equal(Self, Self) -> Bool
+pub fn MoofBox::hash(Self) -> Int
+pub fn MoofBox::hash_combine(Self, Hasher) -> Unit
+pub fn MoofBox::is_unknown_box(Self) -> Bool
+pub fn MoofBox::new(MfhdBox, Array[TrafBox], Array[UnknownBox]) -> Self
+pub fn MoofBox::not_equal(Self, Self) -> Bool
+pub fn MoofBox::to_repr(Self) -> @debug.Repr
+pub impl @box.BaseBox for MoofBox
+pub impl @bytes.Decode for MoofBox
+pub impl @bytes.Encode for MoofBox
+
 pub struct MoovBox {
   mvhd_box : MvhdBox
   trak_boxes : Array[TrakBox]
+  mvex_box : MvexBox?
   unknown_boxes : Array[UnknownBox]
 } derive(Eq, Hash, @debug.Debug)
 pub fn MoovBox::box_type(Self) -> @bytes.BoxType
@@ -785,9 +916,11 @@ pub fn MoovBox::equal(Self, Self) -> Bool
 pub fn MoovBox::hash(Self) -> Int
 pub fn MoovBox::hash_combine(Self, Hasher) -> Unit
 pub fn MoovBox::is_unknown_box(Self) -> Bool
+pub fn MoovBox::mvex_box(Self) -> MvexBox?
 pub fn MoovBox::new(MvhdBox, Array[TrakBox], Array[UnknownBox]) -> Self
 pub fn MoovBox::not_equal(Self, Self) -> Bool
 pub fn MoovBox::to_repr(Self) -> @debug.Repr
+pub fn MoovBox::with_mvex(MvhdBox, Array[TrakBox], MvexBox, Array[UnknownBox]) -> Self
 pub impl @box.BaseBox for MoovBox
 pub impl @bytes.Decode for MoovBox
 pub impl @bytes.Encode for MoovBox
@@ -811,6 +944,26 @@ pub fn Mp4aBox::to_repr(Self) -> @debug.Repr
 pub impl @box.BaseBox for Mp4aBox
 pub impl @bytes.Decode for Mp4aBox
 pub impl @bytes.Encode for Mp4aBox
+
+pub struct MvexBox {
+  mehd_box : MehdBox?
+  trex_boxes : Array[TrexBox]
+  unknown_boxes : Array[UnknownBox]
+} derive(Eq, Hash, @debug.Debug)
+pub fn MvexBox::box_type(Self) -> @bytes.BoxType
+pub fn MvexBox::children(Self) -> Array[&@box.BaseBox]
+pub fn MvexBox::decode(@bytes.ReadCursor) -> Self raise @bytes.Mp4Error
+pub fn MvexBox::encode(Self, @bytes.WriteCursor) -> Unit raise @bytes.Mp4Error
+pub fn MvexBox::equal(Self, Self) -> Bool
+pub fn MvexBox::hash(Self) -> Int
+pub fn MvexBox::hash_combine(Self, Hasher) -> Unit
+pub fn MvexBox::is_unknown_box(Self) -> Bool
+pub fn MvexBox::new(MehdBox?, Array[TrexBox], Array[UnknownBox]) -> Self
+pub fn MvexBox::not_equal(Self, Self) -> Bool
+pub fn MvexBox::to_repr(Self) -> @debug.Repr
+pub impl @box.BaseBox for MvexBox
+pub impl @bytes.Decode for MvexBox
+pub impl @bytes.Encode for MvexBox
 
 pub struct MvhdBox {
   creation_time : @bytes.Mp4FileTime
@@ -884,9 +1037,13 @@ pub impl @bytes.Decode for OpusBox
 pub impl @bytes.Encode for OpusBox
 
 pub(all) enum RootBox {
+  Ftyp(FtypBox)
   Free(FreeBox)
   Mdat(MdatBox)
   Moov(MoovBox)
+  Moof(MoofBox)
+  Sidx(SidxBox)
+  Mfra(MfraBox)
   Unknown(UnknownBox)
 } derive(@debug.Debug)
 pub fn RootBox::box_type(Self) -> @bytes.BoxType
@@ -942,6 +1099,30 @@ pub impl @box.BaseBox for SampleEntry
 pub impl @bytes.Decode for SampleEntry
 pub impl @bytes.Encode for SampleEntry
 
+pub struct SampleFlags {
+  value : UInt
+} derive(Eq, Hash, @debug.Debug)
+pub fn SampleFlags::decode(@bytes.ReadCursor) -> Self raise @bytes.Mp4Error
+pub fn SampleFlags::empty() -> Self
+pub fn SampleFlags::encode(Self, @bytes.WriteCursor) -> Unit raise @bytes.Mp4Error
+pub fn SampleFlags::equal(Self, Self) -> Bool
+pub fn SampleFlags::from_fields(UInt, UInt, UInt, UInt, UInt, Bool, UInt) -> Self
+pub fn SampleFlags::get(Self) -> UInt
+pub fn SampleFlags::hash(Self) -> Int
+pub fn SampleFlags::hash_combine(Self, Hasher) -> Unit
+pub fn SampleFlags::is_leading(Self) -> UInt
+pub fn SampleFlags::new(UInt) -> Self
+pub fn SampleFlags::not_equal(Self, Self) -> Bool
+pub fn SampleFlags::sample_degradation_priority(Self) -> UInt
+pub fn SampleFlags::sample_depends_on(Self) -> UInt
+pub fn SampleFlags::sample_has_redundancy(Self) -> UInt
+pub fn SampleFlags::sample_is_depended_on(Self) -> UInt
+pub fn SampleFlags::sample_is_non_sync_sample(Self) -> Bool
+pub fn SampleFlags::sample_padding_value(Self) -> UInt
+pub fn SampleFlags::to_repr(Self) -> @debug.Repr
+pub impl @bytes.Decode for SampleFlags
+pub impl @bytes.Encode for SampleFlags
+
 pub struct SampleTableAccessor {
   // private fields
 }
@@ -994,6 +1175,46 @@ pub fn SdtpSampleFlags::sample_is_depended_on(Self) -> Byte
 pub fn SdtpSampleFlags::to_repr(Self) -> @debug.Repr
 pub impl @bytes.Decode for SdtpSampleFlags
 pub impl @bytes.Encode for SdtpSampleFlags
+
+pub struct SidxBox {
+  reference_id : UInt
+  timescale : UInt
+  earliest_presentation_time : UInt64
+  first_offset : UInt64
+  references : Array[SidxReference]
+} derive(Eq, Hash, @debug.Debug)
+pub fn SidxBox::box_type(Self) -> @bytes.BoxType
+pub fn SidxBox::children(Self) -> Array[&@box.BaseBox]
+pub fn SidxBox::decode(@bytes.ReadCursor) -> Self raise @bytes.Mp4Error
+pub fn SidxBox::encode(Self, @bytes.WriteCursor) -> Unit raise @bytes.Mp4Error
+pub fn SidxBox::equal(Self, Self) -> Bool
+pub fn SidxBox::full_box_flags(Self) -> @box.FullBoxFlags
+pub fn SidxBox::full_box_version(Self) -> UInt
+pub fn SidxBox::hash(Self) -> Int
+pub fn SidxBox::hash_combine(Self, Hasher) -> Unit
+pub fn SidxBox::is_unknown_box(Self) -> Bool
+pub fn SidxBox::new(UInt, UInt, UInt64, UInt64, Array[SidxReference]) -> Self
+pub fn SidxBox::not_equal(Self, Self) -> Bool
+pub fn SidxBox::to_repr(Self) -> @debug.Repr
+pub impl @box.BaseBox for SidxBox
+pub impl @box.FullBox for SidxBox
+pub impl @bytes.Decode for SidxBox
+pub impl @bytes.Encode for SidxBox
+
+pub struct SidxReference {
+  reference_type : Bool
+  referenced_size : UInt
+  subsegment_duration : UInt
+  starts_with_sap : Bool
+  sap_type : UInt
+  sap_delta_time : UInt
+} derive(Eq, Hash, @debug.Debug)
+pub fn SidxReference::equal(Self, Self) -> Bool
+pub fn SidxReference::hash(Self) -> Int
+pub fn SidxReference::hash_combine(Self, Hasher) -> Unit
+pub fn SidxReference::new(Bool, UInt, UInt, Bool, UInt, UInt) -> Self
+pub fn SidxReference::not_equal(Self, Self) -> Bool
+pub fn SidxReference::to_repr(Self) -> @debug.Repr
 
 pub struct SlConfigDescriptor {
 } derive(Eq, Hash, @debug.Debug)
@@ -1227,6 +1448,96 @@ pub fn SttsEntry::new(UInt, UInt) -> Self
 pub fn SttsEntry::not_equal(Self, Self) -> Bool
 pub fn SttsEntry::to_repr(Self) -> @debug.Repr
 
+pub struct TfdtBox {
+  version : UInt
+  base_media_decode_time : UInt64
+} derive(Eq, Hash, @debug.Debug)
+pub fn TfdtBox::box_type(Self) -> @bytes.BoxType
+pub fn TfdtBox::children(Self) -> Array[&@box.BaseBox]
+pub fn TfdtBox::decode(@bytes.ReadCursor) -> Self raise @bytes.Mp4Error
+pub fn TfdtBox::encode(Self, @bytes.WriteCursor) -> Unit raise @bytes.Mp4Error
+pub fn TfdtBox::equal(Self, Self) -> Bool
+pub fn TfdtBox::full_box_flags(Self) -> @box.FullBoxFlags
+pub fn TfdtBox::full_box_version(Self) -> UInt
+pub fn TfdtBox::hash(Self) -> Int
+pub fn TfdtBox::hash_combine(Self, Hasher) -> Unit
+pub fn TfdtBox::is_unknown_box(Self) -> Bool
+pub fn TfdtBox::new(UInt, UInt64) -> Self
+pub fn TfdtBox::not_equal(Self, Self) -> Bool
+pub fn TfdtBox::to_repr(Self) -> @debug.Repr
+pub impl @box.BaseBox for TfdtBox
+pub impl @box.FullBox for TfdtBox
+pub impl @bytes.Decode for TfdtBox
+pub impl @bytes.Encode for TfdtBox
+
+pub struct TfhdBox {
+  track_id : UInt
+  base_data_offset : UInt64?
+  sample_description_index : UInt?
+  default_sample_duration : UInt?
+  default_sample_size : UInt?
+  default_sample_flags : SampleFlags?
+  duration_is_empty : Bool
+  default_base_is_moof : Bool
+} derive(Eq, Hash, @debug.Debug)
+pub fn TfhdBox::box_type(Self) -> @bytes.BoxType
+pub fn TfhdBox::children(Self) -> Array[&@box.BaseBox]
+pub fn TfhdBox::decode(@bytes.ReadCursor) -> Self raise @bytes.Mp4Error
+pub fn TfhdBox::encode(Self, @bytes.WriteCursor) -> Unit raise @bytes.Mp4Error
+pub fn TfhdBox::equal(Self, Self) -> Bool
+pub fn TfhdBox::full_box_flags(Self) -> @box.FullBoxFlags
+pub fn TfhdBox::full_box_version(Self) -> UInt
+pub fn TfhdBox::hash(Self) -> Int
+pub fn TfhdBox::hash_combine(Self, Hasher) -> Unit
+pub fn TfhdBox::is_unknown_box(Self) -> Bool
+pub fn TfhdBox::new(UInt, UInt64?, UInt?, UInt?, UInt?, SampleFlags?, Bool, Bool) -> Self
+pub fn TfhdBox::not_equal(Self, Self) -> Bool
+pub fn TfhdBox::to_repr(Self) -> @debug.Repr
+pub impl @box.BaseBox for TfhdBox
+pub impl @box.FullBox for TfhdBox
+pub impl @bytes.Decode for TfhdBox
+pub impl @bytes.Encode for TfhdBox
+
+pub struct TfraBox {
+  version : UInt
+  track_id : UInt
+  length_size_of_traf_num : UInt
+  length_size_of_trun_num : UInt
+  length_size_of_sample_num : UInt
+  entries : Array[TfraEntry]
+} derive(Eq, Hash, @debug.Debug)
+pub fn TfraBox::box_type(Self) -> @bytes.BoxType
+pub fn TfraBox::children(Self) -> Array[&@box.BaseBox]
+pub fn TfraBox::decode(@bytes.ReadCursor) -> Self raise @bytes.Mp4Error
+pub fn TfraBox::encode(Self, @bytes.WriteCursor) -> Unit raise @bytes.Mp4Error
+pub fn TfraBox::equal(Self, Self) -> Bool
+pub fn TfraBox::full_box_flags(Self) -> @box.FullBoxFlags
+pub fn TfraBox::full_box_version(Self) -> UInt
+pub fn TfraBox::hash(Self) -> Int
+pub fn TfraBox::hash_combine(Self, Hasher) -> Unit
+pub fn TfraBox::is_unknown_box(Self) -> Bool
+pub fn TfraBox::new(UInt, UInt, UInt, UInt, UInt, Array[TfraEntry]) -> Self
+pub fn TfraBox::not_equal(Self, Self) -> Bool
+pub fn TfraBox::to_repr(Self) -> @debug.Repr
+pub impl @box.BaseBox for TfraBox
+pub impl @box.FullBox for TfraBox
+pub impl @bytes.Decode for TfraBox
+pub impl @bytes.Encode for TfraBox
+
+pub struct TfraEntry {
+  time : UInt64
+  moof_offset : UInt64
+  traf_number : UInt
+  trun_number : UInt
+  sample_number : UInt
+} derive(Eq, Hash, @debug.Debug)
+pub fn TfraEntry::equal(Self, Self) -> Bool
+pub fn TfraEntry::hash(Self) -> Int
+pub fn TfraEntry::hash_combine(Self, Hasher) -> Unit
+pub fn TfraEntry::new(UInt64, UInt64, UInt, UInt, UInt) -> Self
+pub fn TfraEntry::not_equal(Self, Self) -> Bool
+pub fn TfraEntry::to_repr(Self) -> @debug.Repr
+
 pub struct TkhdBox {
   flag_track_enabled : Bool
   flag_track_in_movie : Bool
@@ -1266,6 +1577,27 @@ pub impl @box.FullBox for TkhdBox
 pub impl @bytes.Decode for TkhdBox
 pub impl @bytes.Encode for TkhdBox
 
+pub struct TrafBox {
+  tfhd_box : TfhdBox
+  tfdt_box : TfdtBox?
+  trun_boxes : Array[TrunBox]
+  unknown_boxes : Array[UnknownBox]
+} derive(Eq, Hash, @debug.Debug)
+pub fn TrafBox::box_type(Self) -> @bytes.BoxType
+pub fn TrafBox::children(Self) -> Array[&@box.BaseBox]
+pub fn TrafBox::decode(@bytes.ReadCursor) -> Self raise @bytes.Mp4Error
+pub fn TrafBox::encode(Self, @bytes.WriteCursor) -> Unit raise @bytes.Mp4Error
+pub fn TrafBox::equal(Self, Self) -> Bool
+pub fn TrafBox::hash(Self) -> Int
+pub fn TrafBox::hash_combine(Self, Hasher) -> Unit
+pub fn TrafBox::is_unknown_box(Self) -> Bool
+pub fn TrafBox::new(TfhdBox, TfdtBox?, Array[TrunBox], Array[UnknownBox]) -> Self
+pub fn TrafBox::not_equal(Self, Self) -> Bool
+pub fn TrafBox::to_repr(Self) -> @debug.Repr
+pub impl @box.BaseBox for TrafBox
+pub impl @bytes.Decode for TrafBox
+pub impl @bytes.Encode for TrafBox
+
 pub struct TrakBox {
   tkhd_box : TkhdBox
   edts_box : EdtsBox?
@@ -1286,6 +1618,67 @@ pub fn TrakBox::to_repr(Self) -> @debug.Repr
 pub impl @box.BaseBox for TrakBox
 pub impl @bytes.Decode for TrakBox
 pub impl @bytes.Encode for TrakBox
+
+pub struct TrexBox {
+  track_id : UInt
+  default_sample_description_index : UInt
+  default_sample_duration : UInt
+  default_sample_size : UInt
+  default_sample_flags : SampleFlags
+} derive(Eq, Hash, @debug.Debug)
+pub fn TrexBox::box_type(Self) -> @bytes.BoxType
+pub fn TrexBox::children(Self) -> Array[&@box.BaseBox]
+pub fn TrexBox::decode(@bytes.ReadCursor) -> Self raise @bytes.Mp4Error
+pub fn TrexBox::encode(Self, @bytes.WriteCursor) -> Unit raise @bytes.Mp4Error
+pub fn TrexBox::equal(Self, Self) -> Bool
+pub fn TrexBox::full_box_flags(Self) -> @box.FullBoxFlags
+pub fn TrexBox::full_box_version(Self) -> UInt
+pub fn TrexBox::hash(Self) -> Int
+pub fn TrexBox::hash_combine(Self, Hasher) -> Unit
+pub fn TrexBox::is_unknown_box(Self) -> Bool
+pub fn TrexBox::new(UInt, UInt, UInt, UInt, SampleFlags) -> Self
+pub fn TrexBox::not_equal(Self, Self) -> Bool
+pub fn TrexBox::to_repr(Self) -> @debug.Repr
+pub impl @box.BaseBox for TrexBox
+pub impl @box.FullBox for TrexBox
+pub impl @bytes.Decode for TrexBox
+pub impl @bytes.Encode for TrexBox
+
+pub struct TrunBox {
+  data_offset : Int?
+  first_sample_flags : SampleFlags?
+  samples : Array[TrunSample]
+} derive(Eq, Hash, @debug.Debug)
+pub fn TrunBox::box_type(Self) -> @bytes.BoxType
+pub fn TrunBox::children(Self) -> Array[&@box.BaseBox]
+pub fn TrunBox::decode(@bytes.ReadCursor) -> Self raise @bytes.Mp4Error
+pub fn TrunBox::encode(Self, @bytes.WriteCursor) -> Unit raise @bytes.Mp4Error
+pub fn TrunBox::equal(Self, Self) -> Bool
+pub fn TrunBox::full_box_flags(Self) -> @box.FullBoxFlags
+pub fn TrunBox::full_box_version(Self) -> UInt
+pub fn TrunBox::hash(Self) -> Int
+pub fn TrunBox::hash_combine(Self, Hasher) -> Unit
+pub fn TrunBox::is_unknown_box(Self) -> Bool
+pub fn TrunBox::new(Int?, SampleFlags?, Array[TrunSample]) -> Self
+pub fn TrunBox::not_equal(Self, Self) -> Bool
+pub fn TrunBox::to_repr(Self) -> @debug.Repr
+pub impl @box.BaseBox for TrunBox
+pub impl @box.FullBox for TrunBox
+pub impl @bytes.Decode for TrunBox
+pub impl @bytes.Encode for TrunBox
+
+pub struct TrunSample {
+  duration : UInt?
+  size : UInt?
+  flags : SampleFlags?
+  composition_time_offset : Int64?
+} derive(Eq, Hash, @debug.Debug)
+pub fn TrunSample::equal(Self, Self) -> Bool
+pub fn TrunSample::hash(Self) -> Int
+pub fn TrunSample::hash_combine(Self, Hasher) -> Unit
+pub fn TrunSample::new(UInt?, UInt?, SampleFlags?, Int64?) -> Self
+pub fn TrunSample::not_equal(Self, Self) -> Bool
+pub fn TrunSample::to_repr(Self) -> @debug.Repr
 
 pub struct UnknownBox {
   box_type : @bytes.BoxType

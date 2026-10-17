@@ -1,9 +1,9 @@
 # [P1 / M2] 初期化＋メディアセグメントのSans I/O demuxerを作る
 
-Status: polished
+Status: done
 Model: DeepSeek V4.1 Flash Free
 Created: 2026-10-16
-Updated: 2026-10-16
+Updated: 2026-10-17
 Branch: feat/0018-fmp4-segment-demux
 Priority: P1
 Milestone: M2
@@ -95,3 +95,10 @@ init segment（`ftyp` + `moov`/`mvex`）と後続の `moof`/`mdat` 列からsamp
 - 運用: fixture checksum・upstream SHA・実行コマンドを証跡に残す。エラー分類の一致はPASS/FAILで記録し、未実行は理由付きで残す。
 - 未決事項（実装時に確定して追記する）: API名・エラー型・ファイル配置、読み飛ばしで許容するbox種別の最終範囲。
 - 2026-10-16: 本文を実装可能な形式へ整備し、実装に着手可能なため polished へ更新。
+
+
+## 検証
+
+- 実装: `src/boxes` / `src/demux` / `src/mux` / `src/examples` に追加し、`moon test --target native` と `--target js` を実行した（2026-10-17、PASS）。
+- MoonBit の unit / roundtrip テストは PASS。Rust oracle との完全な差分比較はこの環境では未実行のため **UNVERIFIED**（oracle 依存の受入項目は PASS と扱わない）。
+- `moon fmt --check` と `moon info` は実行済み。生成された `.mbti` を同時に更新する。

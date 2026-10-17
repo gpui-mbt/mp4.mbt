@@ -67,15 +67,15 @@ test "moov retains unknown children in order and returns typed children first" {
 }
 
 ///|
-test "moov keeps mvex as an unknown box until issue 0017" {
+test "moov decodes mvex as a typed box" {
   let mvhd = @bytes.encode_to_bytes(test_mvhd())
   let mvex = test_box_bytes(b"mvex", b"")
   let bytes = test_box_bytes(b"moov", mvhd + mvex)
   let decoded : @boxes.MoovBox = @bytes.decode_from(
     @bytes.ReadCursor::new(bytes),
   )
-  inspect(decoded.unknown_boxes.length(), content="1")
-  inspect(decoded.unknown_boxes[0].box_type.to_string(), content="mvex")
+  inspect(decoded.unknown_boxes.length(), content="0")
+  inspect(decoded.mvex_box() is Some(_), content="true")
   inspect(@bytes.encode_to_bytes(decoded) == bytes, content="true")
 }
 

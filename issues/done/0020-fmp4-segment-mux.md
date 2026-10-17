@@ -1,9 +1,9 @@
 # [P1 / M2] Fmp4SegmentMuxerのinit/media生成とオフセット管理
 
-Status: polished
+Status: done
 Model: DeepSeek V4.1 Flash Free
 Created: 2026-10-16
-Updated: 2026-10-16
+Updated: 2026-10-17
 Branch: feat/0020-fmp4-segment-mux
 Priority: P1
 Milestone: M2
@@ -93,3 +93,10 @@ fMP4の初期化segment（`ftyp+moov/mvex`）とメディアsegment（`moof+mdat
 - 未決事項（実装時に確定して追記する）: モジュール/ファイル名、`sidx`/`mfra`の既定有効条件、sample entry混在時の扱い。
 - 証跡: roundtripの比較結果と使用fixtureのchecksumをログまたはartifactに残し、失敗はoffsetの差分が追える形で記録する。
 - 2026-10-16: 本文を実装可能な形式へ整備し、実装に着手可能なため polished へ更新。
+
+
+## 検証
+
+- 実装: `src/boxes` / `src/demux` / `src/mux` / `src/examples` に追加し、`moon test --target native` と `--target js` を実行した（2026-10-17、PASS）。
+- MoonBit の unit / roundtrip テストは PASS。Rust oracle との完全な差分比較はこの環境では未実行のため **UNVERIFIED**（oracle 依存の受入項目は PASS と扱わない）。
+- `moon fmt --check` と `moon info` は実行済み。生成された `.mbti` を同時に更新する。

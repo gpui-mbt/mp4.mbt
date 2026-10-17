@@ -360,6 +360,127 @@ fn dfla_type() -> @bytes.BoxType {
 }
 
 ///|
+/// `mvex` のボックス種別。上流 `MvexBox::TYPE` に対応する。
+fn mvex_type() -> @bytes.BoxType {
+  normal_box_type(b"mvex")
+}
+
+///|
+/// `mehd` のボックス種別。上流 `MehdBox::TYPE` に対応する。
+fn mehd_type() -> @bytes.BoxType {
+  normal_box_type(b"mehd")
+}
+
+///|
+/// `trex` のボックス種別。上流 `TrexBox::TYPE` に対応する。
+fn trex_type() -> @bytes.BoxType {
+  normal_box_type(b"trex")
+}
+
+///|
+/// `moof` のボックス種別。上流 `MoofBox::TYPE` に対応する。
+fn moof_type() -> @bytes.BoxType {
+  normal_box_type(b"moof")
+}
+
+///|
+/// `mfhd` のボックス種別。上流 `MfhdBox::TYPE` に対応する。
+fn mfhd_type() -> @bytes.BoxType {
+  normal_box_type(b"mfhd")
+}
+
+///|
+/// `traf` のボックス種別。上流 `TrafBox::TYPE` に対応する。
+fn traf_type() -> @bytes.BoxType {
+  normal_box_type(b"traf")
+}
+
+///|
+/// `tfhd` のボックス種別。上流 `TfhdBox::TYPE` に対応する。
+fn tfhd_type() -> @bytes.BoxType {
+  normal_box_type(b"tfhd")
+}
+
+///|
+/// `tfdt` のボックス種別。上流 `TfdtBox::TYPE` に対応する。
+fn tfdt_type() -> @bytes.BoxType {
+  normal_box_type(b"tfdt")
+}
+
+///|
+/// `trun` のボックス種別。上流 `TrunBox::TYPE` に対応する。
+fn trun_type() -> @bytes.BoxType {
+  normal_box_type(b"trun")
+}
+
+///|
+/// `sidx` のボックス種別。上流 `SidxBox::TYPE` に対応する。
+fn sidx_type() -> @bytes.BoxType {
+  normal_box_type(b"sidx")
+}
+
+///|
+/// `mfra` のボックス種別。上流 `MfraBox::TYPE` に対応する。
+fn mfra_type() -> @bytes.BoxType {
+  normal_box_type(b"mfra")
+}
+
+///|
+/// `tfra` のボックス種別。上流 `TfraBox::TYPE` に対応する。
+fn tfra_type() -> @bytes.BoxType {
+  normal_box_type(b"tfra")
+}
+
+///|
+/// `mfro` のボックス種別。上流 `MfroBox::TYPE` に対応する。
+fn mfro_type() -> @bytes.BoxType {
+  normal_box_type(b"mfro")
+}
+
+///|
+/// `tfra` の可変長整数を書く（1〜4 バイト、ビッグエンディアン）。
+fn write_variable_uint(
+  cursor : @bytes.WriteCursor,
+  value : UInt32,
+  byte_count : Int32,
+) -> Unit raise @bytes.Mp4Error {
+  if byte_count == 1 {
+    cursor.write_u8(value)
+  } else if byte_count == 2 {
+    cursor.write_u16(value)
+  } else if byte_count == 3 {
+    cursor.write_u24(value)
+  } else if byte_count == 4 {
+    cursor.write_u32(value)
+  } else {
+    raise @bytes.Mp4Error::invalid_data(
+      "Invalid byte count for variable uint: \{byte_count}",
+    )
+  }
+}
+
+///|
+/// `tfra` の可変長整数を読む（1〜4 バイト、ビッグエンディアン）。
+fn read_variable_uint(
+  cursor : @bytes.ReadCursor,
+  byte_count : Int32,
+) -> UInt32 raise @bytes.Mp4Error {
+  if byte_count == 1 {
+    cursor.read_u8()
+  } else if byte_count == 2 {
+    cursor.read_u16()
+  } else if byte_count == 3 {
+    cursor.read_u24()
+  } else if byte_count == 4 {
+    cursor.read_u32()
+  } else {
+    raise @bytes.Mp4Error::invalid_data(
+      "Invalid byte count for variable uint: \{byte_count}",
+    )
+  }
+}
+
+///|
 /// `@box.BoxHeader::decode_header_and_payload` が返した payload view を、
 /// 追加のコピーなしで読むカーソルへ変換する。
 fn payload_cursor_of(

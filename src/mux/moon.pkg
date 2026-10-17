@@ -1,0 +1,12 @@
+import {
+  "gpui-mbt/mp4/bytes",
+  "gpui-mbt/mp4/box",
+  "gpui-mbt/mp4/boxes",
+}
+
+import {
+  "gpui-mbt/mp4/bytes",
+  "gpui-mbt/mp4/box",
+  "gpui-mbt/mp4/boxes",
+  "gpui-mbt/mp4/demux",
+} for "test"

@@ -4,6 +4,7 @@ target/
 target
 .mooncakes/
 .moonagent/
+.moonhome/
 .repos/
 *.log
 web/dist/

@@ -8,6 +8,22 @@ versions (`M0`–`M5`); unreleased work is listed under `Unreleased`.
 
 ### Added
 
+- Fragmented MP4 support (issues 0017–0021): typed `mvex`/`mehd`/`trex`,
+  `moof`/`mfhd`/`traf`/`tfhd`/`tfdt`/`trun`, `sidx`, `mfra`/`tfra`/`mfro`,
+  `RootBox` fMP4 variants, `Fmp4SegmentDemuxer`, incremental
+  `Fmp4FileDemuxer` (absolute offsets, DTS ordering, entry-change notices,
+  explicit rejection of absolute `tfhd.base_data_offset`), and
+  `Fmp4SegmentMuxer` with init/media metadata, `sidx`, `mfra`, and roundtrip
+  tests. Native `examples/fmp4` muxes a normal MP4 into `init.mp4` + media
+  segments and reads them back. Rust-oracle comparison for the new fMP4 paths
+  is recorded as UNVERIFIED (not yet run).
+
+- Standard MP4 muxing (issues 0022–0023): `Mp4FileMuxer` with
+  `initial_boxes_bytes` → payload → `append_sample` → `finalize`,
+  `advance_position`, faststart reservation, `stts`/`ctts`/`stsc`/`stsz`/
+  `stco`/`co64`/`stss` construction, `PositionMismatch`/`NoSyncSamples`/
+  `AlreadyFinalized` errors, and a native `examples/mux` roundtrip CLI.
+
 - Rust/WASM vs MoonBit/JS conformance diff lab (issue 0016): same MP4 bytes
   are parsed by the pinned-upstream Rust reference compiled to
   `wasm32-unknown-unknown` (`tools/lab-oracle`, a raw `cdylib` with the

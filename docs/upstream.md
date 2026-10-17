@@ -241,9 +241,9 @@ Issue 0007 で確定した対応の補足:
 | `demux::{Mp4FileKind, Mp4FileKindDetector}` | MP4/fMP4 種別検出 | `src/demux`（Issue 0012、完了） |
 | `demux::{Input, RequiredInput, DemuxError}` | 共有の入力契約 | `src/demux`（Issue 0012、完了。0013 の `Mp4FileDemuxer` と共用する） |
 | `demux::{Mp4FileDemuxer, Input, RequiredInput, Sample, TrackInfo, DemuxError}` | 通常 MP4 の Sans I/O demux | `src/demux`（Issue 0013、完了。`prev_sample` / `seek` / `Duration` も同名で移植） |
-| `demux::{Fmp4SegmentDemuxer, Fmp4FileDemuxer}` | fMP4 の demux | `src/demux`（Issue 0018/0019） |
-| `mux::{Mp4FileMuxer, Mp4FileMuxerOptions, Sample, TrackMetadata, FinalizedBoxes, MuxError, estimate_maximum_moov_box_size}` | 通常 MP4 の mux | `src/mux`（Issue 0022） |
-| `mux::{Fmp4SegmentMuxer, SegmentMuxerOptions}` | fMP4 segment の mux | `src/mux`（Issue 0020） |
+| `demux::{Fmp4SegmentDemuxer, Fmp4FileDemuxer}` | fMP4 の demux | `src/demux`（Issue 0018/0019、完了） |
+| `mux::{Mp4FileMuxer, Mp4FileMuxerOptions, Sample, TrackMetadata, FinalizedBoxes, MuxError, estimate_maximum_moov_box_size}` | 通常 MP4 の mux | `src/mux`（Issue 0022、完了） |
+| `mux::{Fmp4SegmentMuxer, SegmentMuxerOptions}` | fMP4 segment の mux | `src/mux`（Issue 0020、完了） |
 | `bitstream::{aac, av1, h264, h265, opus, vp8, vp9}` | コーデック補助（sample entry 構築・NAL/ADTS 解析） | `src/bitstream`（Issue 0024–0026） |
 | `docs::{hybrid_mp4, subtitle}` | 話題別補足ドキュメント | `docs/`（Issue 0027/0028/0033） |
 

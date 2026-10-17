@@ -34,6 +34,23 @@ pub fn Duration::not_equal(Self, Self) -> Bool
 pub fn Duration::subsec_nanos(Self) -> UInt
 pub fn Duration::to_repr(Self) -> @debug.Repr
 
+pub struct Fmp4FileDemuxer {
+  // private fields
+}
+pub fn Fmp4FileDemuxer::handle_input(Self, Input) -> Unit
+pub fn Fmp4FileDemuxer::new() -> Self
+pub fn Fmp4FileDemuxer::next_sample(Self) -> Sample? raise DemuxError
+pub fn Fmp4FileDemuxer::required_input(Self) -> RequiredInput?
+pub fn Fmp4FileDemuxer::tracks(Self) -> Array[TrackInfo] raise DemuxError
+
+pub struct Fmp4SegmentDemuxer {
+  // private fields
+}
+pub fn Fmp4SegmentDemuxer::handle_init_segment(Self, Bytes) -> Unit raise DemuxError
+pub fn Fmp4SegmentDemuxer::handle_media_segment(Self, Bytes) -> Array[Sample] raise DemuxError
+pub fn Fmp4SegmentDemuxer::new() -> Self
+pub fn Fmp4SegmentDemuxer::tracks(Self) -> Array[TrackInfo] raise DemuxError
+
 pub(all) struct Input {
   position : UInt64
   data : BytesView

@@ -56,12 +56,6 @@ fn moov_type() -> @bytes.BoxType {
 }
 
 ///|
-/// `mvex` のボックス種別。
-fn mvex_type() -> @bytes.BoxType {
-  normal_box_type(b"mvex")
-}
-
-///|
 /// 上流の `From<Error> for DemuxError` 変換に対応する、
 /// デコード失敗を [`DemuxError::DecodeError`] に包むヘルパー。
 fn[T] wrap_decode(f : () -> T raise @bytes.Mp4Error) -> T raise DemuxError {
@@ -356,15 +350,11 @@ fn Mp4FileKindDetector::read_moov_box(
       })
 
       // moov ボックス内に mvex ボックスがあるかどうかで判定する。
-      // 現行の `MoovBox` では `mvex` は未型付けで `unknown_boxes` に保持される
-      // （issue 0017 で型付けされる予定）
-      let mut has_mvex = false
-      for b in moov_box.unknown_boxes {
-        if b.box_type == mvex_type() {
-          has_mvex = true
-        }
+      let kind = if moov_box.mvex_box() is Some(_) {
+        FragmentedMp4
+      } else {
+        Mp4
       }
-      let kind = if has_mvex { FragmentedMp4 } else { Mp4 }
       self.phase = Detected(kind~)
     }
     _ => abort("BUG")
