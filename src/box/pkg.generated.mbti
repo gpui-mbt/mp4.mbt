@@ -95,6 +95,7 @@ pub(open) trait BaseBox {
   fn is_unknown_box(Self) -> Bool = _
   fn children(Self) -> Array[&BaseBox]
 }
+pub impl[A : BaseBox, B : BaseBox] BaseBox for @bytes.Either[A, B]
 
 pub(open) trait FullBox : BaseBox {
   fn full_box_version(Self) -> UInt

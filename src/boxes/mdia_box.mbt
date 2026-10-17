@@ -17,7 +17,23 @@
 ///       @bytes.LanguageCode::undefined(),
 ///     ),
 ///     @boxes.HdlrBox::new(@boxes.HdlrBox::handler_type_vide(), b""),
-///     @boxes.MinfBox::new(None, @boxes.DinfBox::local_file(), []),
+///     @boxes.MinfBox::new(
+///       None,
+///       @boxes.DinfBox::local_file(),
+///       @boxes.StblBox::new(
+///         @boxes.StsdBox::new([]),
+///         @boxes.SttsBox::new([]),
+///         None,
+///         None,
+///         @boxes.StscBox::new([]),
+///         @boxes.StszBox::Variable(entry_sizes=[]),
+///         @bytes.Either::A(@boxes.StcoBox::new([])),
+///         None,
+///         None,
+///         [],
+///       ),
+///       [],
+///     ),
 ///     [],
 ///   )
 ///   let bytes = @bytes.encode_to_bytes(box)

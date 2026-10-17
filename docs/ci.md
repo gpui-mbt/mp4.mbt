@@ -14,7 +14,7 @@ results are reported. The workflow files are `.github/workflows/ci.yml` and
 | `moon-test-js` | js | `moon test --target js` | unit tests (same values/errors as native) |
 | `moon-fmt` | — | `moon fmt --check` | formatting diff |
 | `moon-info` | — | `moon info` + `git diff --exit-code -- '*.mbti'` | public API (`surface`) drift |
-| `oracle` | Rust + MoonBit | `cargo test` (tools/oracle), `moon run tools/oracle/regenerate_fixtures.mbtx -- --check`, and the generated oracle-table diff | pinned oracle tests, fixture hashes, golden determinism, generated oracle case tables (`box-headers` / `box-tree` / `moov-tree`) |
+| `oracle` | Rust + MoonBit | `cargo test` (tools/oracle), `moon run tools/oracle/regenerate_fixtures.mbtx -- --check`, and the generated oracle-table diff | pinned oracle tests, fixture hashes, golden determinism, generated oracle case tables (`box-headers` / `box-tree` / `moov-tree` / `sample-tables`) |
 
 - Required checks for merge (branch protection): the 5 MoonBit jobs plus
   `oracle`. Configure them in the repository settings; this list is the
@@ -57,6 +57,8 @@ cargo run --quiet -- box-tree-cases --moonbit > ../../src/boxes/box_tree_oracle_
 cargo run --quiet -- box-tree-fixtures --moonbit > ../../src/boxes/box_tree_oracle_fixtures_test.mbt
 cargo run --quiet -- moov-tree-cases --moonbit > ../../src/boxes/moov_tree_oracle_cases_test.mbt
 cargo run --quiet -- moov-tree-fixtures --moonbit > ../../src/boxes/moov_tree_oracle_fixtures_test.mbt
+cargo run --quiet -- sample-tables-cases --moonbit > ../../src/boxes/sample_table_oracle_cases_test.mbt
+cargo run --quiet -- sample-tables-fixtures --moonbit > ../../src/boxes/sample_table_oracle_fixtures_test.mbt
 cd ../..
 moon fmt
 git diff --exit-code -- \
@@ -64,7 +66,9 @@ git diff --exit-code -- \
   src/boxes/box_tree_oracle_cases_test.mbt \
   src/boxes/box_tree_oracle_fixtures_test.mbt \
   src/boxes/moov_tree_oracle_cases_test.mbt \
-  src/boxes/moov_tree_oracle_fixtures_test.mbt
+  src/boxes/moov_tree_oracle_fixtures_test.mbt \
+  src/boxes/sample_table_oracle_cases_test.mbt \
+  src/boxes/sample_table_oracle_fixtures_test.mbt
 ```
 
 The generated tables are formatted with `moon fmt` (their canonical formatting
@@ -87,7 +91,9 @@ runners are not available:
    `src/boxes/box_tree_oracle_cases_test.mbt`,
    `src/boxes/box_tree_oracle_fixtures_test.mbt`,
    `src/boxes/moov_tree_oracle_cases_test.mbt`,
-   `src/boxes/moov_tree_oracle_fixtures_test.mbt` (or the Rust case
+   `src/boxes/moov_tree_oracle_fixtures_test.mbt`,
+   `src/boxes/sample_table_oracle_cases_test.mbt`,
+   `src/boxes/sample_table_oracle_fixtures_test.mbt` (or the Rust case
    tables/fixture list in `tools/oracle/src/main.rs`) → the `oracle` job's
    generated-table diff fails.
 

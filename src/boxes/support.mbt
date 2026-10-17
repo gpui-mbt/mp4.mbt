@@ -198,6 +198,72 @@ fn write_box_with_payload(
 }
 
 ///|
+/// `stbl` のボックス種別。上流 `StblBox::TYPE` に対応する。
+fn stbl_type() -> @bytes.BoxType {
+  normal_box_type(b"stbl")
+}
+
+///|
+/// `stsd` のボックス種別。上流 `StsdBox::TYPE` に対応する。
+fn stsd_type() -> @bytes.BoxType {
+  normal_box_type(b"stsd")
+}
+
+///|
+/// `stts` のボックス種別。上流 `SttsBox::TYPE` に対応する。
+fn stts_type() -> @bytes.BoxType {
+  normal_box_type(b"stts")
+}
+
+///|
+/// `ctts` のボックス種別。上流 `CttsBox::TYPE` に対応する。
+fn ctts_type() -> @bytes.BoxType {
+  normal_box_type(b"ctts")
+}
+
+///|
+/// `cslg` のボックス種別。上流 `CslgBox::TYPE` に対応する。
+fn cslg_type() -> @bytes.BoxType {
+  normal_box_type(b"cslg")
+}
+
+///|
+/// `sdtp` のボックス種別。上流 `SdtpBox::TYPE` に対応する。
+fn sdtp_type() -> @bytes.BoxType {
+  normal_box_type(b"sdtp")
+}
+
+///|
+/// `stsc` のボックス種別。上流 `StscBox::TYPE` に対応する。
+fn stsc_type() -> @bytes.BoxType {
+  normal_box_type(b"stsc")
+}
+
+///|
+/// `stsz` のボックス種別。上流 `StszBox::TYPE` に対応する。
+fn stsz_type() -> @bytes.BoxType {
+  normal_box_type(b"stsz")
+}
+
+///|
+/// `stco` のボックス種別。上流 `StcoBox::TYPE` に対応する。
+fn stco_type() -> @bytes.BoxType {
+  normal_box_type(b"stco")
+}
+
+///|
+/// `co64` のボックス種別。上流 `Co64Box::TYPE` に対応する。
+fn co64_type() -> @bytes.BoxType {
+  normal_box_type(b"co64")
+}
+
+///|
+/// `stss` のボックス種別。上流 `StssBox::TYPE` に対応する。
+fn stss_type() -> @bytes.BoxType {
+  normal_box_type(b"stss")
+}
+
+///|
 /// `@box.BoxHeader::decode_header_and_payload` が返した payload view を、
 /// 追加のコピーなしで読むカーソルへ変換する。
 fn payload_cursor_of(

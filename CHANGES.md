@@ -8,6 +8,19 @@ versions (`M0`–`M5`); unreleased work is listed under `Unreleased`.
 
 ### Added
 
+- Sample tables and the sample table accessor (issue 0009): `src/boxes` gains
+  the typed `stbl` subtree (`StblBox`, `StsdBox`, `SampleEntry` (unknown-only
+  until 0010), `SttsBox` with `from_sample_deltas`, `CttsBox`, `CslgBox`,
+  `SdtpBox`/`SdtpSampleFlags`, `StscBox`, `StszBox` (`Fixed`/`Variable`),
+  `StcoBox`/`Co64Box`, `StssBox`) and `SampleTableAccessor` /
+  `SampleAccessor` / `ChunkAccessor` with `SampleTableAccessorError`
+  (all 8 upstream variants and messages). `MinfBox` requires `stbl` again
+  (`stbl` was deferred in 0008). `src/bytes` gains `Either[A, B]`; `src/box`
+  forwards `BaseBox` through it. The Rust oracle gains `sample-tables`,
+  `sample-tables-cases` and `sample-tables-fixtures` modes; the generated
+  52-case table and the `stbl`s of all nine fixtures are consumed by
+  `src/boxes/sample_table_oracle_test.mbt` and diffed in CI.
+
 - Movie/track boxes and timestamps (issue 0008): `src/boxes` gains the typed
   `moov` tree (`MoovBox`, `MvhdBox`, `TrakBox`, `TkhdBox`, `EdtsBox`/
   `ElstBox`, `MdiaBox`, `MdhdBox`, `HdlrBox`, `MinfBox`, `MediaHeader`

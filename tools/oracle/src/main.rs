@@ -19,7 +19,8 @@ use std::fs;
 use std::path::Path;
 use std::process::ExitCode;
 
-use shiguredo_mp4::boxes::{MediaHeader, MoovBox};
+use shiguredo_mp4::aux::{SampleTableAccessor, SampleTableAccessorError};
+use shiguredo_mp4::boxes::{MediaHeader, MoovBox, StblBox};
 use shiguredo_mp4::demux::{DemuxError, Input, Mp4FileDemuxer, Mp4FileKind, Mp4FileKindDetector};
 use shiguredo_mp4::{
     BaseBox, BoxHeader, BoxSize, Decode, Encode, FixedPointNumber, LanguageCode, TrackKind,
@@ -102,6 +103,28 @@ fn main() -> ExitCode {
             print!("{}", moov_tree_moonbit_fixtures());
             ExitCode::SUCCESS
         }
+        Some("sample-tables") if args.len() == 3 => match run_sample_tables(&args[2]) {
+            Ok(json) => {
+                println!("{json}");
+                ExitCode::SUCCESS
+            }
+            Err(e) => {
+                eprintln!("oracle error: {e}");
+                ExitCode::FAILURE
+            }
+        },
+        Some("sample-tables-cases") if args.len() == 2 => {
+            println!("{}", run_sample_table_cases());
+            ExitCode::SUCCESS
+        }
+        Some("sample-tables-cases") if args.len() == 3 && args[2] == "--moonbit" => {
+            print!("{}", sample_table_moonbit_cases());
+            ExitCode::SUCCESS
+        }
+        Some("sample-tables-fixtures") if args.len() == 3 && args[2] == "--moonbit" => {
+            print!("{}", sample_table_moonbit_fixtures());
+            ExitCode::SUCCESS
+        }
         _ => {
             eprintln!("usage: mp4-oracle demux <mp4-file>");
             eprintln!("       mp4-oracle box-headers");
@@ -114,6 +137,10 @@ fn main() -> ExitCode {
             eprintln!("       mp4-oracle moov-tree-cases");
             eprintln!("       mp4-oracle moov-tree-cases --moonbit");
             eprintln!("       mp4-oracle moov-tree-fixtures --moonbit");
+            eprintln!("       mp4-oracle sample-tables <mp4-file>");
+            eprintln!("       mp4-oracle sample-tables-cases");
+            eprintln!("       mp4-oracle sample-tables-cases --moonbit");
+            eprintln!("       mp4-oracle sample-tables-fixtures --moonbit");
             ExitCode::from(2)
         }
     }
@@ -2663,6 +2690,1158 @@ fn hex(data: &[u8]) -> String {
     out
 }
 
+// ---------------------------------------------------------------------------
+// sample-tables: `stbl` boxes and `SampleTableAccessor`
+// ---------------------------------------------------------------------------
+
+/// One decoded sample-table observation: the frozen snapshot lines (including
+/// accessor error lines) or the decode error that stopped `StblBox::decode`.
+enum SampleTableOutcome {
+    Ok(Vec<String>),
+    DecodeErr { kind: &'static str, reason: String },
+}
+
+/// Decodes one whole `stbl` box, builds the upstream accessor and snapshots it.
+fn sample_table_outcome(input: &[u8]) -> SampleTableOutcome {
+    match StblBox::decode(input) {
+        Ok((stbl, _)) => SampleTableOutcome::Ok(match SampleTableAccessor::new(stbl) {
+            Ok(accessor) => sample_table_snapshot(&accessor),
+            Err(error) => accessor_error_lines(&error),
+        }),
+        Err(error) => SampleTableOutcome::DecodeErr {
+            kind: error_kind_str(error.kind),
+            reason: error.reason,
+        },
+    }
+}
+
+/// Builds the frozen `sample-tables` snapshot for a constructed accessor.
+///
+/// The line list is frozen by issue 0009 and must match
+/// `sample_table_snapshot` in `src/boxes/sample_table_oracle_test.mbt` line for
+/// line: counts first, then every chunk in order, then every sample in order.
+/// `sample[<i>]` / `chunk[<i>]` use 0-based loop indices while `.index=` is the
+/// 1-based value from the accessor; 64-bit values are decimal.
+fn sample_table_snapshot(accessor: &SampleTableAccessor<StblBox>) -> Vec<String> {
+    let mut lines = Vec::new();
+    lines.push(format!("sample_count={}", accessor.sample_count()));
+    lines.push(format!("chunk_count={}", accessor.chunk_count()));
+    for (i, chunk) in accessor.chunks().enumerate() {
+        lines.push(format!("chunk[{i}].index={}", chunk.index().get()));
+        lines.push(format!("chunk[{i}].offset={}", chunk.offset()));
+        lines.push(format!("chunk[{i}].sample_count={}", chunk.sample_count()));
+        lines.push(format!(
+            "chunk[{i}].sample_entry_index={}",
+            chunk.sample_entry_index()
+        ));
+    }
+    for (i, sample) in accessor.samples().enumerate() {
+        lines.push(format!("sample[{i}].index={}", sample.index().get()));
+        lines.push(format!("sample[{i}].timestamp={}", sample.timestamp()));
+        lines.push(format!("sample[{i}].duration={}", sample.duration()));
+        lines.push(format!("sample[{i}].data_offset={}", sample.data_offset()));
+        lines.push(format!("sample[{i}].data_size={}", sample.data_size()));
+        lines.push(format!(
+            "sample[{i}].sync={}",
+            bool_str(sample.is_sync_sample())
+        ));
+        match sample.composition_time_offset() {
+            Some(offset) => lines.push(format!("sample[{i}].cto={offset}")),
+            None => lines.push(format!("sample[{i}].cto=none")),
+        }
+        lines.push(format!(
+            "sample[{i}].chunk_index={}",
+            sample.chunk().index().get()
+        ));
+    }
+    lines
+}
+
+/// Builds the frozen `error=accessor` lines for a failed
+/// `SampleTableAccessor::new`: the variant name followed by one line per field,
+/// named exactly like the variant field (values are the upstream numbers;
+/// `box_type` uses `BoxType`'s display).
+fn accessor_error_lines(error: &SampleTableAccessorError) -> Vec<String> {
+    use SampleTableAccessorError as E;
+
+    let mut lines = vec![String::from("error=accessor")];
+    match error {
+        E::InconsistentSampleCount {
+            stts_sample_count,
+            other_box_type,
+            other_sample_count,
+        } => {
+            lines.push(String::from("error.variant=InconsistentSampleCount"));
+            lines.push(format!("stts_sample_count={stts_sample_count}"));
+            lines.push(format!("other_box_type={other_box_type}"));
+            lines.push(format!("other_sample_count={other_sample_count}"));
+        }
+        E::FirstChunkIndexIsNotOne { actual_chunk_index } => {
+            lines.push(String::from("error.variant=FirstChunkIndexIsNotOne"));
+            lines.push(format!("actual_chunk_index={}", actual_chunk_index.get()));
+        }
+        E::LastChunkIndexIsTooLarge {
+            max_chunk_index,
+            last_chunk_index,
+        } => {
+            lines.push(String::from("error.variant=LastChunkIndexIsTooLarge"));
+            lines.push(format!("max_chunk_index={}", max_chunk_index.get()));
+            lines.push(format!("last_chunk_index={}", last_chunk_index.get()));
+        }
+        E::MissingSampleEntry {
+            stsc_entry_index,
+            sample_description_index,
+            sample_entry_count,
+        } => {
+            lines.push(String::from("error.variant=MissingSampleEntry"));
+            lines.push(format!("stsc_entry_index={stsc_entry_index}"));
+            lines.push(format!(
+                "sample_description_index={}",
+                sample_description_index.get()
+            ));
+            lines.push(format!("sample_entry_count={sample_entry_count}"));
+        }
+        E::ChunkIndicesNotMonotonicallyIncreasing => {
+            lines.push(String::from(
+                "error.variant=ChunkIndicesNotMonotonicallyIncreasing",
+            ));
+        }
+        E::ChunksExistButNoSamples { chunk_count } => {
+            lines.push(String::from("error.variant=ChunksExistButNoSamples"));
+            lines.push(format!("chunk_count={chunk_count}"));
+        }
+        E::SampleCountOverflow {
+            box_type,
+            accumulated_sample_count,
+            entry_sample_count,
+        } => {
+            lines.push(String::from("error.variant=SampleCountOverflow"));
+            lines.push(format!("box_type={box_type}"));
+            lines.push(format!(
+                "accumulated_sample_count={accumulated_sample_count}"
+            ));
+            lines.push(format!("entry_sample_count={entry_sample_count}"));
+        }
+        E::SampleDataOffsetOverflow {
+            sample_index,
+            accumulated_offset,
+            sample_data_size,
+        } => {
+            lines.push(String::from("error.variant=SampleDataOffsetOverflow"));
+            lines.push(format!("sample_index={}", sample_index.get()));
+            lines.push(format!("accumulated_offset={accumulated_offset}"));
+            lines.push(format!("sample_data_size={sample_data_size}"));
+        }
+    }
+    lines
+}
+
+/// Runs the `stbl` decode + accessor snapshot over every track of an mp4 file
+/// and prints the golden JSON.
+///
+/// `sample_tables` holds one entry per track (`status: "ok"` with the snapshot
+/// lines; accessor errors are embedded as `error=accessor` lines). A missing or
+/// malformed `moov` yields an empty array and describes the failure in
+/// `moov_error` instead.
+fn run_sample_tables(path: &str) -> Result<String, String> {
+    let data = fs::read(path).map_err(|e| format!("failed to read {path}: {e}"))?;
+    let name = Path::new(path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("unknown")
+        .to_owned();
+
+    let mut input = String::from("{");
+    input.push_str("\"name\": ");
+    json_string(&name, &mut input);
+    let _ = write!(input, ", \"size\": \"{}\", \"sha256\": ", data.len());
+    json_string(&sha256_hex(&data), &mut input);
+    input.push('}');
+
+    let (tables, moov_error) = match extract_top_level_box(&data, b"moov") {
+        Ok(moov) => match MoovBox::decode(&moov) {
+            Ok((moov_box, _)) => (sample_tables_json_for_moov(&moov_box), String::from("null")),
+            Err(error) => (
+                String::from("[]"),
+                format!(
+                    "{{\"error_kind\": \"{}\", \"reason\": {}}}",
+                    error_kind_str(error.kind),
+                    json_string_to(&error.reason)
+                ),
+            ),
+        },
+        Err((kind, reason)) => (
+            String::from("[]"),
+            format!(
+                "{{\"error_kind\": \"{kind}\", \"reason\": {}}}",
+                json_string_to(&reason)
+            ),
+        ),
+    };
+
+    let parts = [
+        format!("  \"schema_version\": {SCHEMA_VERSION}"),
+        format!("  \"upstream_sha\": \"{UPSTREAM_SHA}\""),
+        format!("  \"input\": {input}"),
+        format!("  \"sample_tables\": {tables}"),
+        format!("  \"moov_error\": {moov_error}"),
+    ];
+    Ok(format!("{{\n{}\n}}\n", parts.join(",\n")))
+}
+
+/// Snapshots every track in a decoded `moov` (accessor errors become snapshot
+/// lines, matching the case table).
+fn sample_tables_json_for_moov(moov: &MoovBox) -> String {
+    let mut items: Vec<String> = Vec::new();
+    for (track_index, trak) in moov.trak_boxes.iter().enumerate() {
+        let stbl = trak.mdia_box.minf_box.stbl_box.clone();
+        let lines = match SampleTableAccessor::new(stbl) {
+            Ok(accessor) => sample_table_snapshot(&accessor),
+            Err(error) => accessor_error_lines(&error),
+        };
+        items.push(format!(
+            "{{\"track_index\": {track_index}, \"status\": \"ok\", \"snapshot\": {}}}",
+            snapshot_json(&lines)
+        ));
+    }
+    format!("[{}]", items.join(", "))
+}
+
+/// Fixed whole-`stbl`-box case table shared with the MoonBit differential test
+/// (`src/boxes/sample_table_oracle_test.mbt`).
+///
+/// Success cases (including accessor errors, which embed the frozen
+/// `error=accessor` lines) carry the full snapshot; decode failures carry the
+/// error kind and reason. Zero-count `stts`/`ctts` runs with distinct deltas
+/// are excluded on purpose: upstream's `binary_search` may then return any of
+/// the duplicate keys, which issue 0009 does not treat as specified behaviour.
+///
+/// Changing this table changes the generated MoonBit case file; regenerate it
+/// with:
+///   (cd tools/oracle && cargo run -- sample-tables-cases --moonbit) \
+///     > src/boxes/sample_table_oracle_cases_test.mbt
+fn sample_table_cases() -> Vec<(&'static str, Vec<u8>)> {
+    fn raw_box(box_type: &[u8; 4], payload: &[u8]) -> Vec<u8> {
+        let mut out = Vec::with_capacity(8 + payload.len());
+        out.extend_from_slice(&((8 + payload.len()) as u32).to_be_bytes());
+        out.extend_from_slice(box_type);
+        out.extend_from_slice(payload);
+        out
+    }
+
+    fn full_box(box_type: &[u8; 4], version: u8, flags: u32, body: &[u8]) -> Vec<u8> {
+        let mut payload = Vec::with_capacity(4 + body.len());
+        payload.push(version);
+        payload.extend_from_slice(&(flags & 0x00FF_FFFF).to_be_bytes()[1..]);
+        payload.extend_from_slice(body);
+        raw_box(box_type, &payload)
+    }
+
+    fn count_full_box(box_type: &[u8; 4], version: u8, rows: &[Vec<u8>]) -> Vec<u8> {
+        let mut body = ((rows.len() as u32).to_be_bytes()).to_vec();
+        for row in rows {
+            body.extend_from_slice(row);
+        }
+        full_box(box_type, version, 0, &body)
+    }
+
+    fn u32_row(values: &[u32]) -> Vec<u8> {
+        values.iter().flat_map(|v| v.to_be_bytes()).collect()
+    }
+
+    fn u64_row(values: &[u64]) -> Vec<u8> {
+        values.iter().flat_map(|v| v.to_be_bytes()).collect()
+    }
+
+    /// A box whose declared size does not match the bytes that follow it
+    /// (used for the "child exceeds its parent payload" decode error).
+    fn lying_box(box_type: &[u8; 4], declared_size: u32, body: &[u8]) -> Vec<u8> {
+        let mut out = declared_size.to_be_bytes().to_vec();
+        out.extend_from_slice(box_type);
+        out.extend_from_slice(body);
+        out
+    }
+
+    fn stsd(entry_types: &[[u8; 4]]) -> Vec<u8> {
+        let rows: Vec<Vec<u8>> = entry_types.iter().map(|ty| raw_box(ty, &[])).collect();
+        count_full_box(b"stsd", 0, &rows)
+    }
+
+    fn stts(entries: &[(u32, u32)]) -> Vec<u8> {
+        let rows: Vec<Vec<u8>> = entries
+            .iter()
+            .map(|(sample_count, sample_delta)| u32_row(&[*sample_count, *sample_delta]))
+            .collect();
+        count_full_box(b"stts", 0, &rows)
+    }
+
+    fn ctts(version: u8, entries: &[(u32, i64)]) -> Vec<u8> {
+        let rows: Vec<Vec<u8>> = entries
+            .iter()
+            .map(|(sample_count, sample_offset)| {
+                let mut row = sample_count.to_be_bytes().to_vec();
+                if version == 0 {
+                    row.extend_from_slice(&(*sample_offset as u32).to_be_bytes());
+                } else {
+                    row.extend_from_slice(&(*sample_offset as i32).to_be_bytes());
+                }
+                row
+            })
+            .collect();
+        count_full_box(b"ctts", version, &rows)
+    }
+
+    fn cslg(version: u8, values: &[i64; 5]) -> Vec<u8> {
+        let mut body = Vec::new();
+        for value in values {
+            if version == 0 {
+                body.extend_from_slice(&(*value as i32).to_be_bytes());
+            } else {
+                body.extend_from_slice(&value.to_be_bytes());
+            }
+        }
+        full_box(b"cslg", version, 0, &body)
+    }
+
+    fn sdtp(version: u8, flags: &[u8]) -> Vec<u8> {
+        full_box(b"sdtp", version, 0, flags)
+    }
+
+    fn stsc(entries: &[(u32, u32, u32)]) -> Vec<u8> {
+        let rows: Vec<Vec<u8>> = entries
+            .iter()
+            .map(|(first_chunk, sample_per_chunk, sample_description_index)| {
+                u32_row(&[*first_chunk, *sample_per_chunk, *sample_description_index])
+            })
+            .collect();
+        count_full_box(b"stsc", 0, &rows)
+    }
+
+    fn stsz_fixed(sample_size: u32, sample_count: u32) -> Vec<u8> {
+        full_box(b"stsz", 0, 0, &u32_row(&[sample_size, sample_count]))
+    }
+
+    fn stsz_variable(entry_sizes: &[u32]) -> Vec<u8> {
+        let mut body = u32_row(&[0, entry_sizes.len() as u32]);
+        body.extend_from_slice(&u32_row(entry_sizes));
+        full_box(b"stsz", 0, 0, &body)
+    }
+
+    fn stco(chunk_offsets: &[u32]) -> Vec<u8> {
+        let rows: Vec<Vec<u8>> = chunk_offsets.iter().map(|o| u32_row(&[*o])).collect();
+        count_full_box(b"stco", 0, &rows)
+    }
+
+    fn co64(chunk_offsets: &[u64]) -> Vec<u8> {
+        let rows: Vec<Vec<u8>> = chunk_offsets.iter().map(|o| u64_row(&[*o])).collect();
+        count_full_box(b"co64", 0, &rows)
+    }
+
+    fn stss(sample_numbers: &[u32]) -> Vec<u8> {
+        let rows: Vec<Vec<u8>> = sample_numbers.iter().map(|n| u32_row(&[*n])).collect();
+        count_full_box(b"stss", 0, &rows)
+    }
+
+    fn stbl(children: &[Vec<u8>]) -> Vec<u8> {
+        let mut payload = Vec::new();
+        for child in children {
+            payload.extend_from_slice(child);
+        }
+        raw_box(b"stbl", &payload)
+    }
+
+    let mut cases: Vec<(&'static str, Vec<u8>)> = Vec::new();
+
+    // --- valid sample tables ---
+    cases.push((
+        "single_sample_fixed",
+        stbl(&[
+            stsd(&[*b"test"]),
+            stts(&[(1, 100)]),
+            stsc(&[(1, 1, 1)]),
+            stsz_fixed(10, 1),
+            stco(&[1000]),
+        ]),
+    ));
+    cases.push((
+        "multiple_samples_one_chunk",
+        stbl(&[
+            stsd(&[*b"test"]),
+            stts(&[(3, 25)]),
+            stsc(&[(1, 3, 1)]),
+            stsz_variable(&[10, 20, 30]),
+            stco(&[500]),
+        ]),
+    ));
+    cases.push((
+        "several_chunks",
+        stbl(&[
+            stsd(&[*b"test"]),
+            stts(&[(6, 100)]),
+            stsc(&[(1, 2, 1)]),
+            stsz_variable(&[10, 20, 30, 40, 50, 60]),
+            stco(&[100, 200, 300]),
+        ]),
+    ));
+    cases.push((
+        "several_stsc_entries",
+        stbl(&[
+            stsd(&[*b"test"]),
+            stts(&[(6, 50)]),
+            stsc(&[(1, 1, 1), (3, 2, 1)]),
+            stsz_variable(&[1, 2, 3, 4, 5, 6]),
+            stco(&[10, 20, 30, 40]),
+        ]),
+    ));
+    cases.push((
+        "empty_chunk_between",
+        stbl(&[
+            stsd(&[*b"test"]),
+            stts(&[(2, 10)]),
+            stsc(&[(1, 1, 1), (2, 0, 1), (3, 1, 1)]),
+            stsz_variable(&[5, 6]),
+            stco(&[1, 2, 3]),
+        ]),
+    ));
+    cases.push((
+        "empty_trailing_chunk",
+        stbl(&[
+            stsd(&[*b"test"]),
+            stts(&[(2, 10)]),
+            stsc(&[(1, 2, 1), (2, 0, 1)]),
+            stsz_fixed(4, 2),
+            stco(&[7, 8]),
+        ]),
+    ));
+    cases.push((
+        "empty_stsd_no_samples",
+        stbl(&[
+            stsd(&[]),
+            stts(&[]),
+            stsc(&[]),
+            stsz_variable(&[]),
+            stco(&[]),
+        ]),
+    ));
+    cases.push((
+        "fixed_stsz_many_samples",
+        stbl(&[
+            stsd(&[*b"test"]),
+            stts(&[(4, 10)]),
+            stsc(&[(1, 4, 1)]),
+            stsz_fixed(11, 4),
+            stco(&[400]),
+        ]),
+    ));
+    cases.push((
+        "large_duration_u32_max",
+        stbl(&[
+            stsd(&[*b"test"]),
+            stts(&[(2, 4_294_967_295)]),
+            stsc(&[(1, 2, 1)]),
+            stsz_variable(&[1, 1]),
+            stco(&[0]),
+        ]),
+    ));
+    cases.push((
+        "timestamp_beyond_u32",
+        stbl(&[
+            stsd(&[*b"test"]),
+            stts(&[(3, 2_000_000_000)]),
+            stsc(&[(1, 3, 1)]),
+            stsz_variable(&[1, 1, 1]),
+            stco(&[9]),
+        ]),
+    ));
+    cases.push((
+        "stss_partial",
+        stbl(&[
+            stsd(&[*b"test"]),
+            stts(&[(3, 10)]),
+            stsc(&[(1, 3, 1)]),
+            stsz_fixed(1, 3),
+            stco(&[0]),
+            stss(&[1, 3]),
+        ]),
+    ));
+    cases.push((
+        "stss_missing_all_sync",
+        stbl(&[
+            stsd(&[*b"test"]),
+            stts(&[(2, 10)]),
+            stsc(&[(1, 2, 1)]),
+            stsz_fixed(1, 2),
+            stco(&[0]),
+        ]),
+    ));
+    cases.push((
+        "stss_empty_none_sync",
+        stbl(&[
+            stsd(&[*b"test"]),
+            stts(&[(2, 10)]),
+            stsc(&[(1, 2, 1)]),
+            stsz_fixed(1, 2),
+            stco(&[0]),
+            stss(&[]),
+        ]),
+    ));
+    cases.push((
+        "ctts_v0_zero_offsets",
+        stbl(&[
+            stsd(&[*b"test"]),
+            stts(&[(3, 10)]),
+            ctts(0, &[(3, 0)]),
+            stsc(&[(1, 3, 1)]),
+            stsz_fixed(1, 3),
+            stco(&[0]),
+        ]),
+    ));
+    cases.push((
+        "ctts_v1_negative_and_large",
+        stbl(&[
+            stsd(&[*b"test"]),
+            stts(&[(3, 10)]),
+            ctts(1, &[(1, -100), (2, 2_147_483_647)]),
+            stsc(&[(1, 3, 1)]),
+            stsz_fixed(1, 3),
+            stco(&[0]),
+        ]),
+    ));
+    cases.push((
+        "ctts_v0_u32_max",
+        stbl(&[
+            stsd(&[*b"test"]),
+            stts(&[(2, 10)]),
+            ctts(0, &[(1, 10), (1, 4_294_967_295)]),
+            stsc(&[(1, 2, 1)]),
+            stsz_fixed(1, 2),
+            stco(&[0]),
+        ]),
+    ));
+    cases.push((
+        "cslg_v0",
+        stbl(&[
+            stsd(&[*b"test"]),
+            stts(&[(1, 10)]),
+            cslg(0, &[100, -50, 200, 0, 1000]),
+            stsc(&[(1, 1, 1)]),
+            stsz_fixed(1, 1),
+            stco(&[0]),
+        ]),
+    ));
+    cases.push((
+        "cslg_v1",
+        stbl(&[
+            stsd(&[*b"test"]),
+            stts(&[(1, 10)]),
+            cslg(
+                1,
+                &[4_294_967_296, -2_147_483_648, 5_000_000_000, -1, 9_000_000_000],
+            ),
+            stsc(&[(1, 1, 1)]),
+            stsz_fixed(1, 1),
+            stco(&[0]),
+        ]),
+    ));
+    cases.push((
+        "sdtp_present",
+        stbl(&[
+            stsd(&[*b"test"]),
+            stts(&[(2, 10)]),
+            stsc(&[(1, 2, 1)]),
+            stsz_fixed(1, 2),
+            stco(&[0]),
+            sdtp(0, &[0x80, 0xFF]),
+        ]),
+    ));
+    cases.push((
+        "co64_beyond_u32",
+        stbl(&[
+            stsd(&[*b"test"]),
+            stts(&[(2, 10)]),
+            stsc(&[(1, 1, 1)]),
+            stsz_variable(&[5, 6]),
+            co64(&[4_294_967_296, 1_099_511_627_776]),
+        ]),
+    ));
+    cases.push((
+        "stco_u32_max",
+        stbl(&[
+            stsd(&[*b"test"]),
+            stts(&[(1, 1)]),
+            stsc(&[(1, 1, 1)]),
+            stsz_variable(&[1]),
+            stco(&[4_294_967_295]),
+        ]),
+    ));
+    cases.push((
+        "unknown_child",
+        stbl(&[
+            stsd(&[*b"test"]),
+            stts(&[(1, 10)]),
+            stsc(&[(1, 1, 1)]),
+            stsz_fixed(3, 1),
+            stco(&[0]),
+            raw_box(b"zzzz", &[0xAA, 0xBB]),
+        ]),
+    ));
+    cases.push((
+        "duplicate_stsz_first_wins",
+        stbl(&[
+            stsd(&[*b"test"]),
+            stts(&[(1, 7)]),
+            stsc(&[(1, 1, 1)]),
+            stsz_fixed(3, 1),
+            stsz_fixed(99, 1),
+            stco(&[50]),
+        ]),
+    ));
+    cases.push((
+        "stco_and_co64_prefers_stco",
+        stbl(&[
+            stsd(&[*b"test"]),
+            stts(&[(1, 10)]),
+            stsc(&[(1, 1, 1)]),
+            stsz_fixed(1, 1),
+            stco(&[100]),
+            co64(&[200]),
+        ]),
+    ));
+
+    // --- accessor errors (decoded successfully, then rejected by the accessor) ---
+    cases.push((
+        "error_stts_stsz_mismatch",
+        stbl(&[
+            stsd(&[*b"test"]),
+            stts(&[(1, 100)]),
+            stsc(&[(1, 1, 1)]),
+            stsz_fixed(10, 2),
+            stco(&[0]),
+        ]),
+    ));
+    cases.push((
+        "error_stts_ctts_mismatch",
+        stbl(&[
+            stsd(&[*b"test"]),
+            stts(&[(2, 100)]),
+            ctts(0, &[(1, 0)]),
+            stsc(&[(1, 2, 1)]),
+            stsz_fixed(10, 2),
+            stco(&[0]),
+        ]),
+    ));
+    cases.push((
+        "error_stts_stsc_mismatch",
+        stbl(&[
+            stsd(&[*b"test"]),
+            stts(&[(2, 100)]),
+            stsc(&[(1, 1, 1)]),
+            stsz_fixed(10, 2),
+            stco(&[0]),
+        ]),
+    ));
+    cases.push((
+        "error_chunks_without_stsc",
+        stbl(&[
+            stsd(&[*b"test"]),
+            stts(&[(1, 100)]),
+            stsc(&[]),
+            stsz_fixed(10, 1),
+            stco(&[100]),
+        ]),
+    ));
+    cases.push((
+        "error_first_chunk_not_one",
+        stbl(&[
+            stsd(&[*b"test"]),
+            stts(&[(1, 100)]),
+            stsc(&[(2, 1, 1)]),
+            stsz_fixed(10, 1),
+            stco(&[0]),
+        ]),
+    ));
+    cases.push((
+        "error_missing_sample_entry",
+        stbl(&[
+            stsd(&[*b"test"]),
+            stts(&[(1, 100)]),
+            stsc(&[(1, 1, 2)]),
+            stsz_fixed(10, 1),
+            stco(&[0]),
+        ]),
+    ));
+    cases.push((
+        "error_missing_sample_entry_empty_stsd",
+        stbl(&[
+            stsd(&[]),
+            stts(&[(1, 100)]),
+            stsc(&[(1, 1, 1)]),
+            stsz_fixed(10, 1),
+            stco(&[0]),
+        ]),
+    ));
+    cases.push((
+        "error_stsc_not_monotonic",
+        stbl(&[
+            stsd(&[*b"test"]),
+            stts(&[(2, 100)]),
+            stsc(&[(1, 1, 1), (1, 1, 1)]),
+            stsz_fixed(10, 2),
+            stco(&[0, 1]),
+        ]),
+    ));
+    cases.push((
+        "error_last_chunk_too_large",
+        stbl(&[
+            stsd(&[*b"test"]),
+            stts(&[(2, 100)]),
+            stsc(&[(1, 1, 1), (3, 1, 1)]),
+            stsz_fixed(10, 2),
+            stco(&[0, 1]),
+        ]),
+    ));
+    cases.push((
+        "error_fixed_offset_overflow",
+        stbl(&[
+            stsd(&[*b"test"]),
+            stts(&[(1, 100)]),
+            stsc(&[(1, 1, 1)]),
+            stsz_fixed(10, 1),
+            co64(&[u64::MAX - 5]),
+        ]),
+    ));
+    cases.push((
+        "error_variable_offset_overflow",
+        stbl(&[
+            stsd(&[*b"test"]),
+            stts(&[(2, 100)]),
+            stsc(&[(1, 2, 1)]),
+            stsz_variable(&[1, 1]),
+            co64(&[u64::MAX - 1]),
+        ]),
+    ));
+    cases.push((
+        "error_stts_count_overflow",
+        stbl(&[
+            stsd(&[*b"test"]),
+            stts(&[(4_294_967_295, 1), (1, 1)]),
+            stsc(&[]),
+            stsz_variable(&[]),
+            stco(&[]),
+        ]),
+    ));
+    cases.push((
+        "error_ctts_count_overflow",
+        stbl(&[
+            stsd(&[*b"test"]),
+            stts(&[(1, 1)]),
+            ctts(0, &[(4_294_967_295, 0), (1, 0)]),
+            stsc(&[(1, 1, 1)]),
+            stsz_fixed(1, 1),
+            stco(&[0]),
+        ]),
+    ));
+
+    // --- decode errors ---
+    cases.push((
+        "decode_missing_stsd",
+        stbl(&[
+            stts(&[(1, 10)]),
+            stsc(&[(1, 1, 1)]),
+            stsz_fixed(1, 1),
+            stco(&[0]),
+        ]),
+    ));
+    cases.push((
+        "decode_missing_stts",
+        stbl(&[
+            stsd(&[*b"test"]),
+            stsc(&[(1, 1, 1)]),
+            stsz_fixed(1, 1),
+            stco(&[0]),
+        ]),
+    ));
+    cases.push((
+        "decode_missing_stsc",
+        stbl(&[
+            stsd(&[*b"test"]),
+            stts(&[(1, 10)]),
+            stsz_fixed(1, 1),
+            stco(&[0]),
+        ]),
+    ));
+    cases.push((
+        "decode_missing_stsz",
+        stbl(&[
+            stsd(&[*b"test"]),
+            stts(&[(1, 10)]),
+            stsc(&[(1, 1, 1)]),
+            stco(&[0]),
+        ]),
+    ));
+    cases.push((
+        "decode_missing_stco_or_co64",
+        stbl(&[
+            stsd(&[*b"test"]),
+            stts(&[(1, 10)]),
+            stsc(&[(1, 1, 1)]),
+            stsz_fixed(1, 1),
+        ]),
+    ));
+    cases.push((
+        "decode_ctts_version",
+        stbl(&[
+            stsd(&[*b"test"]),
+            stts(&[(1, 10)]),
+            full_box(b"ctts", 2, 0, &u32_row(&[0])),
+            stsc(&[(1, 1, 1)]),
+            stsz_fixed(1, 1),
+            stco(&[0]),
+        ]),
+    ));
+    cases.push((
+        "decode_cslg_version",
+        stbl(&[
+            stsd(&[*b"test"]),
+            stts(&[(1, 10)]),
+            full_box(b"cslg", 2, 0, &[]),
+            stsc(&[(1, 1, 1)]),
+            stsz_fixed(1, 1),
+            stco(&[0]),
+        ]),
+    ));
+    cases.push((
+        "decode_sdtp_version",
+        stbl(&[
+            stsd(&[*b"test"]),
+            stts(&[(1, 10)]),
+            sdtp(1, &[0]),
+            stsc(&[(1, 1, 1)]),
+            stsz_fixed(1, 1),
+            stco(&[0]),
+        ]),
+    ));
+    cases.push((
+        "decode_stss_zero_number",
+        stbl(&[
+            stsd(&[*b"test"]),
+            stts(&[(1, 10)]),
+            stsc(&[(1, 1, 1)]),
+            stsz_fixed(1, 1),
+            stco(&[0]),
+            stss(&[0]),
+        ]),
+    ));
+    cases.push((
+        "decode_stsc_zero_first_chunk",
+        stbl(&[
+            stsd(&[*b"test"]),
+            stts(&[(1, 10)]),
+            stsc(&[(0, 1, 1)]),
+            stsz_fixed(1, 1),
+            stco(&[0]),
+        ]),
+    ));
+    cases.push((
+        "decode_stsc_zero_description_index",
+        stbl(&[
+            stsd(&[*b"test"]),
+            stts(&[(1, 10)]),
+            stsc(&[(1, 1, 0)]),
+            stsz_fixed(1, 1),
+            stco(&[0]),
+        ]),
+    ));
+    cases.push((
+        "decode_stts_entry_truncated",
+        stbl(&[
+            stsd(&[*b"test"]),
+            full_box(b"stts", 0, 0, &u32_row(&[1])),
+            stsc(&[(1, 1, 1)]),
+            stsz_fixed(1, 1),
+            stco(&[0]),
+        ]),
+    ));
+    cases.push((
+        "decode_stsz_variable_truncated",
+        stbl(&[
+            stsd(&[*b"test"]),
+            stts(&[(2, 10)]),
+            stsc(&[(1, 2, 1)]),
+            full_box(b"stsz", 0, 0, &u32_row(&[0, 2, 5])),
+            stco(&[0]),
+        ]),
+    ));
+    cases.push((
+        "decode_stsd_entry_truncated",
+        stbl(&[
+            full_box(b"stsd", 0, 0, &[0, 0, 0, 1, 0, 0, 0, 8]),
+            stts(&[(1, 10)]),
+            stsc(&[(1, 1, 1)]),
+            stsz_fixed(1, 1),
+            stco(&[0]),
+        ]),
+    ));
+    cases.push((
+        "decode_child_declared_size_exceeds_payload",
+        stbl(&[
+            stsd(&[*b"test"]),
+            stts(&[(1, 10)]),
+            stsc(&[(1, 1, 1)]),
+            stsz_fixed(1, 1),
+            lying_box(b"stco", 100, &u32_row(&[0, 0])),
+        ]),
+    ));
+
+    cases
+}
+
+/// Runs the fixed `stbl` case table and emits the normalised JSON.
+fn run_sample_table_cases() -> String {
+    let cases = sample_table_cases();
+    let mut items: Vec<String> = Vec::new();
+    for (name, input) in &cases {
+        let mut entry = format!("{{\"name\": \"{name}\", \"input\": \"{}\"", hex(input));
+        match sample_table_outcome(input) {
+            SampleTableOutcome::Ok(snapshot) => {
+                let _ = write!(
+                    entry,
+                    ", \"ok\": true, \"snapshot\": {}",
+                    snapshot_json(&snapshot)
+                );
+            }
+            SampleTableOutcome::DecodeErr { kind, reason } => {
+                let _ = write!(
+                    entry,
+                    ", \"ok\": false, \"error_kind\": \"{kind}\", \"reason\": {}",
+                    json_string_to(&reason)
+                );
+            }
+        }
+        entry.push('}');
+        items.push(entry);
+    }
+    format!(
+        "{{\"schema\": {SCHEMA_VERSION}, \"upstream_sha\": \"{UPSTREAM_SHA}\", \"cases\": [{}]}}",
+        items.join(", ")
+    )
+}
+
+/// Emits the MoonBit case-table file consumed by
+/// `src/boxes/sample_table_oracle_test.mbt`.
+fn sample_table_moonbit_cases() -> String {
+    let mut out = String::new();
+    let _ = writeln!(
+        out,
+        "// Generated by `cargo run -- sample-tables-cases --moonbit` (tools/oracle)."
+    );
+    let _ = writeln!(
+        out,
+        "// Source of truth: tools/oracle/src/main.rs (sample_table_cases)."
+    );
+    let _ = writeln!(out, "// Upstream: shiguredo/mp4-rs@{UPSTREAM_SHA}");
+    let _ = writeln!(
+        out,
+        "// DO NOT EDIT MANUALLY. Regenerate (canonical formatting is part of the file):"
+    );
+    let _ = writeln!(
+        out,
+        "//   (cd tools/oracle && cargo run -- sample-tables-cases --moonbit) \\"
+    );
+    let _ = writeln!(
+        out,
+        "//     > src/boxes/sample_table_oracle_cases_test.mbt"
+    );
+    let _ = writeln!(out, "//   moon fmt");
+    let _ = writeln!(out);
+    let _ = writeln!(out, "///|");
+    let _ = writeln!(
+        out,
+        "/// `tools/oracle` の `sample-tables-cases` が返すケース表（生成物）。"
+    );
+    let _ = writeln!(out, "///");
+    let _ = writeln!(
+        out,
+        "/// 型は `src/boxes/sample_table_oracle_test.mbt` で定義する。手で編集しない。"
+    );
+    let _ = writeln!(
+        out,
+        "let oracle_sample_table_cases : Array[OracleSampleTableCase] = ["
+    );
+    for (name, input) in &sample_table_cases() {
+        let _ = writeln!(out, "  {{");
+        let _ = writeln!(out, "    name: \"{name}\",");
+        let _ = writeln!(out, "    input: {},", moonbit_bytes(input));
+        match sample_table_outcome(input) {
+            SampleTableOutcome::Ok(snapshot) => {
+                let _ = writeln!(out, "    ok: true,");
+                write_moonbit_snapshot(&mut out, &snapshot, 4);
+                let _ = writeln!(out, "    error_kind: \"\",");
+                let _ = writeln!(out, "    reason: \"\",");
+            }
+            SampleTableOutcome::DecodeErr { kind, reason } => {
+                let _ = writeln!(out, "    ok: false,");
+                let _ = writeln!(out, "    snapshot: [],");
+                let _ = writeln!(out, "    error_kind: \"{kind}\",");
+                let _ = writeln!(out, "    reason: {},", moonbit_string(&reason));
+            }
+        }
+        let _ = writeln!(out, "  }},");
+    }
+    let _ = writeln!(out, "]");
+    out
+}
+
+/// Fixtures embedded (with `include_bytes!`) in the generated MoonBit
+/// differential test. The generated data embeds each track's `stbl` box
+/// re-encoded by upstream, so it changes exactly when a fixture's sample
+/// tables change.
+const SAMPLE_TABLE_FIXTURES: &[(&str, &[u8])] = &[
+    (
+        "black-h264-video.mp4",
+        include_bytes!("../../../tests/fixtures/upstream/black-h264-video.mp4"),
+    ),
+    (
+        "black-h265-video.mp4",
+        include_bytes!("../../../tests/fixtures/upstream/black-h265-video.mp4"),
+    ),
+    (
+        "black-h265-hvc1-video.mp4",
+        include_bytes!("../../../tests/fixtures/upstream/black-h265-hvc1-video.mp4"),
+    ),
+    (
+        "black-av1-video.mp4",
+        include_bytes!("../../../tests/fixtures/upstream/black-av1-video.mp4"),
+    ),
+    (
+        "black-vp9-video.mp4",
+        include_bytes!("../../../tests/fixtures/upstream/black-vp9-video.mp4"),
+    ),
+    (
+        "beep-aac-audio.mp4",
+        include_bytes!("../../../tests/fixtures/upstream/beep-aac-audio.mp4"),
+    ),
+    (
+        "beep-opus-audio.mp4",
+        include_bytes!("../../../tests/fixtures/upstream/beep-opus-audio.mp4"),
+    ),
+    (
+        "beep-flac-audio.mp4",
+        include_bytes!("../../../tests/fixtures/upstream/beep-flac-audio.mp4"),
+    ),
+    (
+        "black-h264-fmp4.mp4",
+        include_bytes!("../../../tests/fixtures/upstream/black-h264-fmp4.mp4"),
+    ),
+];
+
+/// Extracts every track's `stbl` from every fixture and re-encodes it with
+/// upstream (panics on failure: generation must not silently emit stale data).
+fn sample_table_fixture_stbls() -> Vec<(&'static str, usize, Vec<u8>)> {
+    let mut out = Vec::new();
+    for (name, data) in SAMPLE_TABLE_FIXTURES {
+        let moov_bytes =
+            extract_top_level_box(data, b"moov").unwrap_or_else(|(kind, reason)| {
+                panic!("{name}: top-level moov extraction failed: {kind}: {reason}")
+            });
+        let (moov, _) = MoovBox::decode(&moov_bytes).unwrap_or_else(|e| {
+            panic!(
+                "{name}: moov decode failed: {}: {}",
+                error_kind_str(e.kind),
+                e.reason
+            )
+        });
+        for (track_index, trak) in moov.trak_boxes.iter().enumerate() {
+            let stbl = trak
+                .mdia_box
+                .minf_box
+                .stbl_box
+                .encode_to_vec()
+                .unwrap_or_else(|e| {
+                    panic!(
+                        "{name} track {track_index}: stbl encode failed: {}: {}",
+                        error_kind_str(e.kind),
+                        e.reason
+                    )
+                });
+            out.push((*name, track_index, stbl));
+        }
+    }
+    out
+}
+
+/// Emits the fixture differential data consumed by
+/// `src/boxes/sample_table_oracle_test.mbt`.
+fn sample_table_moonbit_fixtures() -> String {
+    let fixtures = sample_table_fixture_stbls();
+    let mut out = String::new();
+    let _ = writeln!(
+        out,
+        "// Generated by `cargo run -- sample-tables-fixtures --moonbit` (tools/oracle)."
+    );
+    let _ = writeln!(
+        out,
+        "// Source of truth: tools/oracle/src/main.rs (SAMPLE_TABLE_FIXTURES)."
+    );
+    let _ = writeln!(
+        out,
+        "// Fixtures (per-track `stbl` re-encoded by upstream from the checked-in mp4):"
+    );
+    for (name, track_index, stbl) in &fixtures {
+        let _ = writeln!(
+            out,
+            "//   {name} track {track_index}: stbl {} bytes, sha256 {}",
+            stbl.len(),
+            sha256_hex(stbl)
+        );
+    }
+    let _ = writeln!(out, "// Upstream: shiguredo/mp4-rs@{UPSTREAM_SHA}");
+    let _ = writeln!(
+        out,
+        "// DO NOT EDIT MANUALLY. Regenerate (canonical formatting is part of the file):"
+    );
+    let _ = writeln!(
+        out,
+        "//   (cd tools/oracle && cargo run -- sample-tables-fixtures --moonbit) \\"
+    );
+    let _ = writeln!(
+        out,
+        "//     > src/boxes/sample_table_oracle_fixtures_test.mbt"
+    );
+    let _ = writeln!(out, "//   moon fmt");
+    let _ = writeln!(out);
+    let _ = writeln!(out, "///|");
+    let _ = writeln!(
+        out,
+        "/// `tools/oracle` の `sample-tables-fixtures` が返す fixture 走査（生成物）。"
+    );
+    let _ = writeln!(out, "///");
+    let _ = writeln!(
+        out,
+        "/// 型は `src/boxes/sample_table_oracle_test.mbt` で定義する。手で編集しない。"
+    );
+    let _ = writeln!(
+        out,
+        "let oracle_sample_table_fixtures : Array[OracleSampleTableFixture] = ["
+    );
+    for (name, track_index, stbl) in &fixtures {
+        let snapshot = match sample_table_outcome(stbl) {
+            SampleTableOutcome::Ok(snapshot) => snapshot,
+            SampleTableOutcome::DecodeErr { kind, reason } => {
+                panic!("{name} track {track_index}: re-decoded stbl failed: {kind}: {reason}")
+            }
+        };
+        let _ = writeln!(out, "  {{");
+        let _ = writeln!(out, "    name: \"{name}\",");
+        let _ = writeln!(out, "    track_index: {track_index},");
+        let _ = writeln!(out, "    stbl: {},", moonbit_bytes(stbl));
+        write_moonbit_snapshot(&mut out, &snapshot, 4);
+        let _ = writeln!(out, "  }},");
+    }
+    let _ = writeln!(out, "]");
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2884,5 +4063,116 @@ mod tests {
     fn json_string_escaping() {
         assert_eq!(json_string_to("a\"b\\c\n"), "\"a\\\"b\\\\c\\n\"");
         assert_eq!(json_string_to("avc1"), "\"avc1\"");
+    }
+
+    #[test]
+    fn sample_table_cases_output_is_deterministic_and_covers_boundaries() {
+        let json = run_sample_table_cases();
+        assert_eq!(json, run_sample_table_cases());
+        // fixed / variable stsz, exact data offsets
+        assert!(json.contains("\"name\": \"single_sample_fixed\""));
+        assert!(json.contains("sample[0].data_offset=1000"));
+        assert!(json.contains("sample[0].data_size=10"));
+        assert!(json.contains("sample[0].cto=none"));
+        // `ctts` なしと 0 / 負値 / u32::MAX の区別
+        assert!(json.contains("sample[0].cto=0"));
+        assert!(json.contains("sample[0].cto=-100"));
+        assert!(json.contains("sample[1].cto=4294967295"));
+        // co64 の 64bit offset と stco の u32::MAX
+        assert!(json.contains("sample[0].data_offset=4294967296"));
+        assert!(json.contains("sample[0].data_offset=4294967295"));
+        // u32 を超える累計尺は 64bit の十進で現れる
+        assert!(json.contains("sample[2].timestamp=4000000000"));
+        // stss present (partial) / missing / empty
+        assert!(json.contains("sample[1].sync=false"));
+        assert!(json.contains("\"name\": \"stss_missing_all_sync\""));
+        assert!(json.contains("\"name\": \"stss_empty_none_sync\""));
+        // accessor error lines
+        assert!(json.contains("\"error=accessor\""));
+        assert!(json.contains("\"error.variant=InconsistentSampleCount\""));
+        assert!(json.contains("\"other_box_type=stsz\""));
+        assert!(json.contains("\"error.variant=SampleDataOffsetOverflow\""));
+        assert!(json.contains("accumulated_offset=18446744073709551610"));
+        // decode errors: exact upstream reasons
+        assert!(json.contains("Missing mandatory 'stsd' box in 'stbl' box"));
+        assert!(json.contains("Missing mandatory 'stco' or 'co64' box in 'stbl' box"));
+        assert!(json.contains("Invalid ctts box version: 2"));
+        assert!(json.contains("Invalid cslg box version: 2"));
+        assert!(json.contains("Invalid sdtp box version: 1"));
+        assert!(json.contains("Expected a non-zero integer, but got 0"));
+    }
+
+    #[test]
+    fn sample_table_cases_cover_every_accessor_error_variant() {
+        let json = run_sample_table_cases();
+        for variant in [
+            "InconsistentSampleCount",
+            "FirstChunkIndexIsNotOne",
+            "LastChunkIndexIsTooLarge",
+            "MissingSampleEntry",
+            "ChunkIndicesNotMonotonicallyIncreasing",
+            "ChunksExistButNoSamples",
+            "SampleCountOverflow",
+            "SampleDataOffsetOverflow",
+        ] {
+            assert!(
+                json.contains(&format!("\"error.variant={variant}\"")),
+                "missing accessor error variant {variant}"
+            );
+        }
+    }
+
+    #[test]
+    fn sample_table_cases_cover_decode_error_kinds() {
+        let json = run_sample_table_cases();
+        for kind in ["invalid_input", "invalid_data", "insufficient_buffer"] {
+            assert!(
+                json.contains(&format!("\"error_kind\": \"{kind}\"")),
+                "missing error kind {kind}"
+            );
+        }
+    }
+
+    #[test]
+    fn sample_table_moonbit_output_is_deterministic() {
+        assert_eq!(sample_table_moonbit_cases(), sample_table_moonbit_cases());
+        assert_eq!(
+            sample_table_moonbit_fixtures(),
+            sample_table_moonbit_fixtures()
+        );
+    }
+
+    #[test]
+    fn sample_table_fixture_stbls_decode_and_snapshot() {
+        let stbls = sample_table_fixture_stbls();
+        assert_eq!(stbls.len(), 9, "expected one track per fixture");
+        for (name, track_index, stbl) in &stbls {
+            match sample_table_outcome(stbl) {
+                SampleTableOutcome::Ok(snapshot) => {
+                    assert!(
+                        !snapshot.is_empty(),
+                        "{name} track {track_index}: empty snapshot"
+                    );
+                    assert!(
+                        snapshot[0].starts_with("sample_count="),
+                        "{name} track {track_index}: first line is {}",
+                        snapshot[0]
+                    );
+                }
+                SampleTableOutcome::DecodeErr { kind, reason } => {
+                    panic!("{name} track {track_index}: stbl decode failed: {kind}: {reason}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sample_table_file_output_is_deterministic() {
+        let path = "../../tests/fixtures/upstream/black-h264-video.mp4";
+        let json = run_sample_tables(path).expect("run_sample_tables");
+        assert_eq!(json, run_sample_tables(path).expect("run_sample_tables"));
+        assert!(json.contains("\"sample_tables\""));
+        assert!(json.contains("\"status\": \"ok\""));
+        assert!(json.contains("\"moov_error\": null"));
     }
 }

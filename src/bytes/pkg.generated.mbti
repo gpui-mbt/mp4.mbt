@@ -63,6 +63,16 @@ pub fn BoxType::not_equal(Self, Self) -> Bool
 pub fn BoxType::to_repr(Self) -> @debug.Repr
 pub fn BoxType::to_string(Self) -> String
 
+pub(all) enum Either[A, B] {
+  A(A)
+  B(B)
+} derive(Eq, Hash, @debug.Debug)
+pub fn[A : Eq, B : Eq] Either::equal(Self[A, B], Self[A, B]) -> Bool
+pub fn[A : Hash, B : Hash] Either::hash(Self[A, B]) -> Int
+pub fn[A : Hash, B : Hash] Either::hash_combine(Self[A, B], Hasher) -> Unit
+pub fn[A : Eq, B : Eq] Either::not_equal(Self[A, B], Self[A, B]) -> Bool
+pub fn[A : @debug.Debug, B : @debug.Debug] Either::to_repr(Self[A, B]) -> @debug.Repr
+
 pub(all) enum ErrorKind {
   InvalidInput
   InvalidData

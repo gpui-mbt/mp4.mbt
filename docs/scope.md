@@ -52,7 +52,8 @@
 | fMP4 file demux | `Fmp4FileDemuxer` | Not started | Unit / oracle |
 | 通常 MP4 file mux | `Mp4FileMuxer` | Not started | Unit / interop |
 | fMP4 segment mux | `Fmp4SegmentMuxer` | Not started | Unit / interop |
-| Box tree / box 単体 | `boxes` | Partial（box envelope 0006、ルート box と tree 走査 0007、moov 木と時刻型 0008） | Unit / wire 往復 / oracle |
+| Box tree / box 単体 | `boxes` | Partial（box envelope 0006、ルート box と tree 走査 0007、moov 木と時刻型 0008、stbl table 群 0009） | Unit / wire 往復 / oracle |
+| sample table（`stbl`）と `SampleTableAccessor` | `boxes_moov_tree` / `auxiliary` | Implemented（0009） | Unit / wire 往復 / oracle / fixture |
 | RFC 6381 codecs 文字列 | `codec_string` | Not started | Unit / oracle |
 | AVC/HEVC bitstream 補助 | `bitstream::{h264, h265}` | Not started | Unit / fixture |
 | AAC/Opus bitstream 補助 | `bitstream::{aac, opus}` | Not started | Unit / fixture |

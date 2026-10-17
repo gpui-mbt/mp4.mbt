@@ -67,9 +67,26 @@ fn test_hdlr() -> @boxes.HdlrBox {
 }
 
 ///|
+/// テストで使う最小構成の `stbl`（全テーブル空、`stco`）。
+fn test_stbl() -> @boxes.StblBox {
+  @boxes.StblBox::new(
+    @boxes.StsdBox::new([]),
+    @boxes.SttsBox::new([]),
+    None,
+    None,
+    @boxes.StscBox::new([]),
+    @boxes.StszBox::Variable(entry_sizes=[]),
+    @bytes.Either::A(@boxes.StcoBox::new([])),
+    None,
+    None,
+    [],
+  )
+}
+
+///|
 /// テストで使う最小構成の `minf`（media_header なし、`dinf` は local file）。
 fn test_minf() -> @boxes.MinfBox {
-  @boxes.MinfBox::new(None, @boxes.DinfBox::local_file(), [])
+  @boxes.MinfBox::new(None, @boxes.DinfBox::local_file(), test_stbl(), [])
 }
 
 ///|
@@ -103,13 +120,26 @@ fn test_nmhd_bytes() -> Bytes {
 }
 
 ///|
-/// テストで使う `stbl` の canonical なバイト列（中身なし）。
-fn test_stbl_bytes() -> Bytes {
-  test_box_bytes(b"stbl", b"")
+/// テストで使う `stbl` の canonical なバイト列（中身は [`test_stbl`] と同じ）。
+fn test_stbl_bytes() -> Bytes raise {
+  @bytes.encode_to_bytes(test_stbl())
 }
 
 ///|
 /// テストで使う未知ボックス（`zzzz`）の canonical なバイト列。
 fn test_unknown_bytes() -> Bytes {
   test_box_bytes(b"zzzz", b"\xAA\xBB")
+}
+
+///|
+/// テストで使うサンプルエントリー（`test` という box_type の未知エントリー）の
+/// canonical なバイト列。
+fn test_sample_entry_bytes() -> Bytes {
+  b"\x00\x00\x00\x08test"
+}
+
+///|
+/// テストで使うサンプルエントリー。
+fn test_sample_entry() -> @boxes.SampleEntry raise {
+  @bytes.decode_from(@bytes.ReadCursor::new(test_sample_entry_bytes()))
 }

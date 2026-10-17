@@ -115,6 +115,8 @@ jobs:
           cargo run --quiet -- box-tree-fixtures --moonbit > ../../src/boxes/box_tree_oracle_fixtures_test.mbt
           cargo run --quiet -- moov-tree-cases --moonbit > ../../src/boxes/moov_tree_oracle_cases_test.mbt
           cargo run --quiet -- moov-tree-fixtures --moonbit > ../../src/boxes/moov_tree_oracle_fixtures_test.mbt
+          cargo run --quiet -- sample-tables-cases --moonbit > ../../src/boxes/sample_table_oracle_cases_test.mbt
+          cargo run --quiet -- sample-tables-fixtures --moonbit > ../../src/boxes/sample_table_oracle_fixtures_test.mbt
       - name: Verify generated oracle tables are current and formatted
         run: |
           moon fmt
@@ -123,10 +125,14 @@ jobs:
             src/boxes/box_tree_oracle_cases_test.mbt \
             src/boxes/box_tree_oracle_fixtures_test.mbt \
             src/boxes/moov_tree_oracle_cases_test.mbt \
-            src/boxes/moov_tree_oracle_fixtures_test.mbt
-          printf 'generated oracle tables are in sync (box-headers: %s cases, box-tree: %s cases, box-tree fixtures: %s, moov-tree: %s cases, moov-tree fixtures: %s)\n' \
+            src/boxes/moov_tree_oracle_fixtures_test.mbt \
+            src/boxes/sample_table_oracle_cases_test.mbt \
+            src/boxes/sample_table_oracle_fixtures_test.mbt
+          printf 'generated oracle tables are in sync (box-headers: %s cases, box-tree: %s cases, box-tree fixtures: %s, moov-tree: %s cases, moov-tree fixtures: %s, sample-tables: %s cases, sample-tables fixtures: %s)\n' \
             "$(grep -c '    name: ' src/box/box_header_oracle_cases_test.mbt)" \
             "$(grep -c '    name: ' src/boxes/box_tree_oracle_cases_test.mbt)" \
             "$(grep -c '    name: ' src/boxes/box_tree_oracle_fixtures_test.mbt)" \
             "$(grep -c '    name: ' src/boxes/moov_tree_oracle_cases_test.mbt)" \
-            "$(grep -c '    name: ' src/boxes/moov_tree_oracle_fixtures_test.mbt)"
+            "$(grep -c '    name: ' src/boxes/moov_tree_oracle_fixtures_test.mbt)" \
+            "$(grep -c '    name: ' src/boxes/sample_table_oracle_cases_test.mbt)" \
+            "$(grep -c '    name: ' src/boxes/sample_table_oracle_fixtures_test.mbt)"

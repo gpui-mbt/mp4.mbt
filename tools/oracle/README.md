@@ -40,6 +40,12 @@ cargo run --quiet -- moov-tree ../../tests/fixtures/upstream/black-h264-video.mp
 # moov boundary-case table (JSON on stdout)
 cargo run --quiet -- moov-tree-cases
 
+# sample table (stbl + accessor) snapshot of one file (JSON on stdout)
+cargo run --quiet -- sample-tables ../../tests/fixtures/upstream/black-h264-video.mp4
+
+# sample-table boundary-case table (JSON on stdout)
+cargo run --quiet -- sample-tables-cases
+
 # regenerate all goldens and verify determinism + fixture hashes
 cd ../..
 moon run tools/oracle/regenerate_fixtures.mbtx
@@ -134,6 +140,42 @@ regenerates every generated table in place, runs `moon fmt` and fails on any
 `git diff`, so changing `moov_tree_cases` or `MOOV_TREE_FIXTURES` always
 requires regenerating the MoonBit side in the same commit.
 
+### Sample table case table and embedded stbls
+
+`sample-tables <file>` extracts the top-level `moov` box from one file and, for
+every track, decodes the `stbl` box and runs the upstream
+`SampleTableAccessor`. Each track is emitted as `{track_index, status: "ok",
+snapshot: [...]}`; accessor failures are embedded as the frozen
+`error=accessor` lines instead of a `status`. A missing or malformed `moov`
+yields `sample_tables: []` plus a `moov_error` object (`null` on success).
+Snapshot lines: counts first, then every chunk, then every sample, with 0-based
+loop indices in `chunk[i]`/`sample[i]` and explicit 1-based `.index=` values;
+64-bit values are decimal strings.
+
+`sample-tables-cases` runs the fixed whole-`stbl`-box boundary-case table in
+`src/main.rs` (`sample_table_cases`); `sample-tables-cases --moonbit` emits it
+as `src/boxes/sample_table_oracle_cases_test.mbt`. `sample-tables-fixtures
+--moonbit` emits `src/boxes/sample_table_oracle_fixtures_test.mbt` with the
+`stbl` box bytes re-encoded by upstream from every checked-in fixture (the file
+header records each track's byte length and sha256) and their expected
+snapshots. Both are consumed by `src/boxes/sample_table_oracle_test.mbt`:
+
+```bash
+cd tools/oracle
+cargo run --quiet -- sample-tables-cases --moonbit > ../../src/boxes/sample_table_oracle_cases_test.mbt
+cargo run --quiet -- sample-tables-fixtures --moonbit > ../../src/boxes/sample_table_oracle_fixtures_test.mbt
+cd ../..
+moon fmt   # canonical formatting is part of the generated files
+```
+
+The generated files are committed and must not be edited by hand. CI
+regenerates every generated table in place, runs `moon fmt` and fails on any
+`git diff`, so changing `sample_table_cases` or `SAMPLE_TABLE_FIXTURES` always
+requires regenerating the MoonBit side in the same commit. Cases where upstream
+is unspecified (duplicate binary-search keys from zero-count `stts`/`ctts`
+runs with distinct deltas) are excluded from the differential on purpose and
+covered by unit tests only.
+
 ## Normalised schema (version 1)
 
 - `input`: `name`, `size` and `sha256` of the fixture (size is a decimal string).
@@ -162,6 +204,14 @@ requires regenerating the MoonBit side in the same commit.
   `src/boxes/moov_tree_oracle_test.mbt`. Note that upstream
   `insufficient_buffer` errors carry an empty `reason`, so the differential
   test compares `reason` only when the oracle reports one.
+- `sample-tables <file>` prints a separate document with `input`
+  (name/size/sha256 of the fixture), `sample_tables` (one
+  `{track_index, status: "ok", snapshot: [...]}` per track; accessor errors are
+  embedded as the frozen `error=accessor` lines) and `moov_error` (`null` or
+  `{error_kind, reason}` when the top-level `moov` could not be extracted or
+  decoded). `snapshot` is a flat array of `sample_count` / `chunk[i].*` /
+  `sample[i].*` lines frozen by `sample_table_snapshot` in `src/main.rs` and
+  mirrored by `src/boxes/sample_table_oracle_test.mbt`.
 
 Unavailable fixtures or oracle failures are reported as failures by
 `regenerate_fixtures.mbtx`; they are never treated as "no difference".

@@ -42,13 +42,13 @@ MoonBit 側の最終的な package / 公開名は Issue 0002 で確定し、本�
 | 上流 | 概要 | MoonBit 側の対応 |
 | --- | --- | --- |
 | `BaseBox` / `BoxHeader` / `BoxSize` / `BoxType` / `FullBox` / `FullBoxFlags` / `FullBoxHeader` | box envelope と共通ヘッダ | `src/box`（Issue 0006、完了） |
-| `Either<T, U>` | 2 形態の union | `src/bytes`（後続 Issue で追加。利用は 0009 以降） |
+| `Either<T, U>` | 2 形態の union | `src/bytes` の `Either[A, B]`（Issue 0009、完了。`BaseBox` の転送 impl は `src/box`） |
 | `FixedPointNumber` | 固定小数点数 | `src/bytes` の `FixedPointNumber`（Issue 0005、完了） |
 | `Uint` / `Utf8String` / `LanguageCode` | 基本値型 | `Utf8String` / `LanguageCode` は `src/bytes`（Issue 0008、完了）。`Uint` は後続 Issue |
 | `Mp4File` / `Mp4FileTime` / `TrackKind` / `SampleFlags` | 時刻・トラック・フラグ | `Mp4FileTime` / `TrackKind` は `src/bytes`（Issue 0008、完了）。`SampleFlags` は後続 Issue（0017 など）、`Mp4File` は `src/boxes`（Issue 0013） |
 | `Error` / `ErrorKind` | 失敗分類 | `src/bytes` の `Mp4Error` / `ErrorKind`（Issue 0005、完了。`Either`/`Uint` 等は後続） |
 | `Decode` / `Encode` / `Result` | codec trait | `src/bytes`（Issue 0006、完了） |
-| `aux::{ChunkAccessor, SampleAccessor, SampleTableAccessor, SampleTableAccessorError}` | sample table 走査 | `src/boxes`（Issue 0009） |
+| `aux::{ChunkAccessor, SampleAccessor, SampleTableAccessor, SampleTableAccessorError}` | sample table 走査 | `src/boxes`（Issue 0009、完了） |
 
 Issue 0005 で確定した対応の補足:
 
@@ -105,18 +105,33 @@ Issue 0007 で確定した対応の補足:
 | `NonZeroU32` | `NonZeroU32`（`src/bytes`） | `new` は 0 で `None`。`Decode` は上流と同じ "Expected a non-zero integer, but got 0"（`InvalidInput`）。`timescale` に使う |
 | `MoovBox` / `MvhdBox` / `TrakBox` / `TkhdBox` / `EdtsBox` / `ElstBox` / `MdiaBox` / `MdhdBox` / `HdlrBox` / `MinfBox` / `MediaHeader` / `DinfBox` / `DrefBox` / `UrlBox` | 同名（`src/boxes`） | 必須子 box の欠落は上流と同じ "Missing mandatory '...' box in '...' box"（`InvalidData`）。重複は最初の 1 個のみ採用し、以降は `unknown_boxes` に保持 |
 | `MoovBox::mvex_box` | 未実装 | `mvex` / `mehd` / `trex` は Issue 0017 まで `unknown_boxes` に保持する（`MoovBox` は `mvhd_box` / `trak_boxes` / `unknown_boxes`） |
-| `MinfBox::stbl_box` | 未実装 | `stbl` は Issue 0009 まで `unknown_boxes` に保持する。上流は `minf` の必須子に `stbl` を要求するが、0008 では `dinf` のみ必須（設計どおりの一時差。0009 で `stbl_box` を追加して必須に戻す） |
+| `MinfBox::stbl_box` | `MinfBox::stbl_box : StblBox` | 0008 では `stbl` を `unknown_boxes` に保持する一時差があった（`dinf` のみ必須）。0009 で `stbl_box` を追加して必須子に戻した（欠落時は `InvalidData "Missing mandatory 'stbl' box in 'minf' box"`。`MinfBox::new` も `StblBox` を必須引数にする） |
 | `HdlrBox::name`（`Vec<u8>`） | `HdlrBox::name : Bytes` | 上流と同じく生バイト列として保持し、UTF-8 解釈や NUL 終端処理をしない |
 | （対応型なし） | `HdlrBox::handler_type_vide()` / `handler_type_soun()` / `handler_type_subt()` / `handler_type_text()` / `track_kind()`（`src/boxes`） | 上流の `HdlrBox::HANDLER_TYPE_*` 定数と demux の `handler_type` → `TrackKind` 対応（vide/soun/subt/text → Video/Audio/Subtitle、未知は skip）をヘルパーとして公開する |
 | `SmhdBox::balance`（`FixedPointNumber<u8, u8>`） | `SmhdBox::balance` + `ReadCursor::read_fixed_8_8_unsigned` / `WriteCursor::write_fixed_8_8_unsigned`（`src/bytes`） | 8.8 の整数部・小数部を符号なしバイトとして読み書きするヘルパーを追加。他の rate/volume/matrix は既存の符号付き読み書き（生ビット同一）を継続し、`FixedPointNumber` は小数部を符号なしビットで保持する |
+
+### Issue 0009 で確定した対応の補足
+
+| 上流 | MoonBit 側 | 備考 |
+| --- | --- | --- |
+| `basic_types::Either<T, U>` | `Either[A, B]`（`src/bytes`） | `A`/`B` の 2 variant。上流の `BaseBox` 転送は `pub impl[A : BaseBox, B : BaseBox] BaseBox for @bytes.Either[A, B]`（`src/box`）で行う。`pub extend @bytes.Either with BaseBox` はコンパイルエラー 4059（型とトレイトが別 package）のため使えない。`Either` へのトレイト呼び出しは `@box.BaseBox::box_type(either)` と書く（メソッド記法不可。意図的な差） |
+| `boxes_moov_tree::{StblBox, StsdBox, SttsBox, CttsBox, CslgBox, SdtpBox, StscBox, StszBox, StcoBox, Co64Box, StssBox}` | 同名（`src/boxes`） | 必須子の欠落は上流と同じ "Missing mandatory '...' box in 'stbl' box"（`stco`/`co64` は `"stco' or 'co64"`）。`stco` と `co64` が両方あるときは両方 decode してから `stco` を採用（`Either::A`）。重複 box は最初の 1 個を採用し、以降は `unknown_boxes`。`ctts`/`cslg` は version 0/1、`sdtp` は version 0 のみ |
+| `SampleEntry`（型付き variant 群） | `SampleEntry::{Unknown(UnknownBox)}`（`src/boxes`） | **意図的な一時差**: 0009 では全 entry を raw fallback（`UnknownBox::decode`）として保持し、`box_type`/`children`/`is_unknown_box` は内側へ委譲する。型付き variant（`Avc1`/`Hvc1`/`Vp09`/`Mp4a` 等）は Issue 0010 で追加する |
+| `SttsBox::from_sample_deltas` | `SttsBox::from_sample_deltas(Iter[UInt])`（`src/boxes`） | 連続する同値を run-length 集約する。`sample_count` の u32 合計が溢れると `InvalidData "stts sample_count overflow"` |
+| `SdtpSampleFlags` | `SdtpSampleFlags { value : Byte }`（`src/boxes`） | `from_fields(is_leading, sample_depends_on, sample_is_depended_on, sample_has_redundancy)` / `get` と 4 つの 2-bit accessor。2-bit を超える入力はマスクする |
+| `MinfBox::stbl_box` | `MinfBox::stbl_box : StblBox`（`src/boxes`） | 0008 の一時差を解消し、`stbl` を `minf` の必須子に戻した。`MinfBox::new(media_header?, dinf_box, stbl_box, unknown_boxes)` |
+| `auxiliary::{SampleTableAccessor, SampleAccessor, ChunkAccessor}` | 同名（`src/boxes`） | 上流の `T: AsRef<StblBox>` ジェネリクスと `AsRef` impl は移植しない（上流の唯一の利用者は所有 `StblBox` を渡す）。`SampleTableAccessor::new(StblBox)` が値を受け取り、accessor は `StblBox` をコピー保持する（値セマンティクス。意図的な差）。`samples()`/`chunks()` は `Iter` を返し、per-sample の計算は O(1)（全 sample 配列は生成しない。run-length prefix table のみ box の entry 数に比例）。`get_sample`/`get_chunk`/`get_sample_by_timestamp` は範囲外・該当なしで `None` |
+| `auxiliary::SampleTableAccessorError` | `SampleTableAccessorError`（`suberror`、`src/boxes`） | 上流と同じ 8 variant・フィールド名・`Display` 文言（`to_string`）を持ち、`raise` で返す。`sample_entry_count` は `UInt`、`stsc_entry_index` は `Int` で保持する |
+| （アクセスの端境界） | `chunk()` は `partition_point(\|x\| x <= index) - 1`、`get_sample_by_timestamp` は上流と同じ binary search | ゼロ件 `stts`/`ctts` が異なる値で並ぶ場合、上流 `binary_search` のどちらの重複キーを返すかは未規定。MoonBit 側は決定的（leftmost）に実装し、この形の入力は oracle 差分から除外して unit test のみで固定する |
+| （対応型なし） | oracle `sample-tables` / `sample-tables-cases` / `sample-tables-fixtures`（`tools/oracle`） | `moov-tree` と同じ正規化 JSON / `--moonbit` 生成。`input` は絶対 path ではなく `name`/`size`/`sha256`、`moov_error` で `moov` 抽出・decode 失敗を表す（リポジトリの再現性ルール）。golden は `src/boxes/sample_table_oracle_*.mbt` と差分比較 |
 
 ### `boxes` / `codec_string` / `descriptors`
 
 | 上流 | 概要 | MoonBit 側の対応（予定） |
 | --- | --- | --- |
 | `RootBox::{FtypBox, FreeBox, MdatBox, UnknownBox}` | ルート直下の box | `src/boxes`（Issue 0007、完了。`moof` / `mfra` / `sidx` の variant は 0017。`moov` は 0008 で `RootBox::Moov` として追加済み） |
-| moov tree 群（`MoovBox` 〜 `TrexBox`） | movie/track/media/table box | `src/boxes`（`MoovBox` / `MvhdBox` / `TrakBox` / `TkhdBox` / `EdtsBox` / `ElstBox` / `MdiaBox` / `MdhdBox` / `HdlrBox` / `MinfBox` / `MediaHeader` / `DinfBox` / `DrefBox` / `UrlBox` は Issue 0008、完了。`stbl` は 0009、`mvex` / `mehd` / `trex` は 0017） |
-| sample entry 群（`SampleEntry`, `Avc1Box`, `Hvc1Box`, `Hev1Box`, `Vp08Box`, `Vp09Box`, `Av01Box`, `OpusBox`, `Mp4aBox`, `FlacBox`, `StppBox`, `WvttBox`, `Tx3gBox` ほか） | コーデック別 entry | `src/boxes`（Issue 0010/0028） |
+| moov tree 群（`MoovBox` 〜 `TrexBox`） | movie/track/media/table box | `src/boxes`（`MoovBox` / `MvhdBox` / `TrakBox` / `TkhdBox` / `EdtsBox` / `ElstBox` / `MdiaBox` / `MdhdBox` / `HdlrBox` / `MinfBox` / `MediaHeader` / `DinfBox` / `DrefBox` / `UrlBox` は Issue 0008、`stbl` 配下の table 群は Issue 0009、いずれも完了。`mvex` / `mehd` / `trex` は 0017） |
+| sample entry 群（`SampleEntry`, `Avc1Box`, `Hvc1Box`, `Hev1Box`, `Vp08Box`, `Vp09Box`, `Av01Box`, `OpusBox`, `Mp4aBox`, `FlacBox`, `StppBox`, `WvttBox`, `Tx3gBox` ほか） | コーデック別 entry | `src/boxes`（`SampleEntry` の `Unknown` fallback のみ Issue 0009、型付き entry は Issue 0010/0028） |
 | fMP4 群（`MoofBox`, `TfhdBox`, `TrunBox`, `SidxBox`, `MfraBox` ほか） | fragment box | `src/boxes`（Issue 0017） |
 | `codec_string::generate_codecs_string` | RFC 6381 codecs 文字列 | `src/boxes`（Issue 0011） |
 | `descriptors::{EsDescriptor, DecoderConfigDescriptor, DecoderSpecificInfo, SlConfigDescriptor}` | MPEG-4 descriptor | `src/boxes`（Issue 0025 で利用） |
@@ -179,6 +194,7 @@ Issue 0007 で確定した対応の補足:
 
 ## 7. 更新履歴
 
+- 2026-10-17: Issue 0009（stbl と SampleTableAccessor）の対応表を追記。`Either` と `src/box` の `BaseBox` 転送 impl（`pub extend` 不可の理由）、`SampleEntry` の unknown-only（0010 で型付き化）、`MinfBox::stbl_box` の必須化（0008 の一時差の解消）、非ジェネリック accessor（`AsRef` を移植しない意図的な差）、`SampleTableAccessorError` の対応、未規定の重複キー探索を差分対象外にして leftmost 固定する方針、oracle `sample-tables` 系モードを記録。
 - 2026-10-17: Issue 0008（moov tree と時刻情報）の対応表を追記。`Mp4FileTime` の秒保持、`Utf8String`/`LanguageCode`/`TrackKind`/`NonZeroU32` の対応、`mvex`/`stbl` の一時的な未知 box 扱い（`minf` が `stbl` を必須にしない一時差）、`HdlrBox::name` の生バイト保持、`track_kind()` ヘルパーと 8.8 unsigned ヘルパーを記録。`Mp4File` の追加先を 0013 に修正。
 - 2026-10-17: Issue 0007（ルート box と box tree 走査）の対応表を追記。`Brand` → `FourCC`、`MdatBox` の範囲保持（意図的な差）、`RootBox` の variant 追加予定、独自の box tree API を記録。
 - 2026-10-16: 初版（Issue 0001）。固定 SHA、ライセンス、API 対応表、規格一覧、更新手順を記録。

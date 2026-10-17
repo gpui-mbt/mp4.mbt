@@ -102,7 +102,7 @@ Rust oracle is a *separate executable* that reads the same fixtures.
 
 **最短の実行可能な read-only 縦スライス:** `0001→0002→0004→0005→0006→0007→0008→0009→0010→0013→0014→0015`。並列に `0003`（CI）と `0012`（kind detector）、続いて `0016`（Rust比）を進める。最初から全コーデック・映像表示・全 mux を同時並行で着手しない。
 
-各 Issue は 1 件 1 PR 相当を基本とし、大きな [0009](./0009-sample-tables.md)／[0010](./0010-sample-entries.md)／[0022](./0022-mp4-file-mux.md) は必要ならファイル単位・box 群単位でさらに分割してよい。ただし分割後も親の受入条件を残す。**CI Green かつ独立レビュー Approve 相当／P1 なしをマージの標準条件**とし、評価対象 commit を明示する。
+各 Issue は 1 件 1 PR 相当を基本とし、大きな [0009](../done/0009-sample-tables.md)／[0010](./0010-sample-entries.md)／[0022](./0022-mp4-file-mux.md) は必要ならファイル単位・box 群単位でさらに分割してよい。ただし分割後も親の受入条件を残す。**CI Green かつ独立レビュー Approve 相当／P1 なしをマージの標準条件**とし、評価対象 commit を明示する。
 
 ### テスト・互換性判定
 
@@ -174,7 +174,7 @@ M1 では**動画そのものの再生や変換**を UI に表示できなくて
 - [x] [0006 BoxHeader・BoxSize・FourCC・uuidを実装する](../done/0006-box-header.md) — P0 / deps: 0005
 - [x] [0007 ftyp・mdat・free・UnknownBoxとBox treeを実装する](../done/0007-root-box-tree.md) — P0 / deps: 0006
 - [x] [0008 moov／trak／mdia／minfと時刻情報を移植する](../done/0008-movie-track-boxes.md) — P0 / deps: 0007
-- [ ] [0009 stblとSampleTableAccessorを移植する](./0009-sample-tables.md) — P0 / deps: 0008
+- [x] [0009 stblとSampleTableAccessorを移植する](../done/0009-sample-tables.md) — P0 / deps: 0008
 - [ ] [0010 video／audio SampleEntryの型付き対応を作る](./0010-sample-entries.md) — P0 / deps: 0008, 0009
 - [ ] [0011 RFC 6381 codec stringをSampleEntryから生成する](./0011-codec-strings.md) — P1 / deps: 0010
 - [ ] [0012 MP4／fMP4種別検出をRange I/Oで実装する](./0012-file-kind-detector.md) — P0 / deps: 0007, 0008

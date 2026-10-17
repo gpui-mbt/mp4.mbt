@@ -1,15 +1,26 @@
 ///|
 /// [ISO/IEC 14496-12] MediaInformationBox（`minf`）(親: [`MdiaBox`])。
 ///
-/// メディアヘッダーとデータ情報を保持する。上流 `MinfBox` に対応する。
-/// 上流が持つ `stbl_box` は本 Issue では型付けせず、`stbl` は
-/// [`UnknownBox`] として `unknown_boxes` に保持する（Issue 0009 で対応する）。
+/// メディアヘッダー・データ情報・サンプルテーブルを保持する。上流 `MinfBox` に
+/// 対応する。`dinf` と `stbl` は必須。
 ///
 /// ```mbt check
 /// test {
 ///   let box = @boxes.MinfBox::new(
 ///     Some(@boxes.MediaHeader::Nmhd(@boxes.NmhdBox::new())),
 ///     @boxes.DinfBox::local_file(),
+///     @boxes.StblBox::new(
+///       @boxes.StsdBox::new([]),
+///       @boxes.SttsBox::new([]),
+///       None,
+///       None,
+///       @boxes.StscBox::new([]),
+///       @boxes.StszBox::Variable(entry_sizes=[]),
+///       @bytes.Either::A(@boxes.StcoBox::new([])),
+///       None,
+///       None,
+///       [],
+///     ),
 ///     [],
 ///   )
 ///   let bytes = @bytes.encode_to_bytes(box)
@@ -32,8 +43,9 @@ pub struct MinfBox {
   media_header : MediaHeader?
   /// メディアデータの所在情報を保持する `dinf` ボックス
   dinf_box : DinfBox
-  /// 上記のいずれにも該当しなかった子ボックス群（未知の box_type を含む。
-  /// 本 Issue では `stbl` もここに入る）
+  /// サンプルテーブルを保持する `stbl` ボックス
+  stbl_box : StblBox
+  /// 上記のいずれにも該当しなかった子ボックス群（未知の box_type を含む）
   unknown_boxes : Array[UnknownBox]
 } derive(Eq, Hash, Debug)
 
@@ -51,18 +63,20 @@ pub extend MinfBox with Debug::{to_repr}
 pub fn MinfBox::new(
   media_header : MediaHeader?,
   dinf_box : DinfBox,
+  stbl_box : StblBox,
   unknown_boxes : Array[UnknownBox],
 ) -> MinfBox {
-  { media_header, dinf_box, unknown_boxes, }
+  { media_header, dinf_box, stbl_box, unknown_boxes, }
 }
 
 ///|
 /// `minf` をデコードする。
 ///
 /// メディアヘッダー系（`smhd` / `vmhd` / `sthd` / `nmhd`）は最初に見つかった
-/// 1 種類だけを採用し、2 個目以降は [`UnknownBox`] へ落とす。`dinf` は必須で、
-/// 無い場合は [`@bytes.ErrorKind::InvalidData`] で失敗する。`stbl` は本 Issue
-/// では型付けせず [`UnknownBox`] として保持する。
+/// 1 種類だけを採用し、2 個目以降は [`UnknownBox`] へ落とす。`dinf` と `stbl` は
+/// 必須で、無い場合は [`@bytes.ErrorKind::InvalidData`]
+/// （`"Missing mandatory 'dinf' box in 'minf' box"` /
+/// `"Missing mandatory 'stbl' box in 'minf' box"`）で失敗する。
 pub impl @bytes.Decode for MinfBox with fn decode(cursor : @bytes.ReadCursor) -> MinfBox raise @bytes.Mp4Error {
   let start = cursor.position()
   errdefer cursor.rewind_to(start)
@@ -72,6 +86,7 @@ pub impl @bytes.Decode for MinfBox with fn decode(cursor : @bytes.ReadCursor) ->
     let payload_cursor = payload_cursor_of(cursor, payload)
     let mut media_header : MediaHeader? = None
     let mut dinf_box : DinfBox? = None
+    let mut stbl_box : StblBox? = None
     let unknown_boxes : Array[UnknownBox] = []
     while !payload_cursor.is_empty() {
       let child_type = peek_box_type(payload_cursor)
@@ -85,6 +100,8 @@ pub impl @bytes.Decode for MinfBox with fn decode(cursor : @bytes.ReadCursor) ->
         media_header = Some(@bytes.decode_from(payload_cursor))
       } else if child_type == dinf_type() && dinf_box is None {
         dinf_box = Some(@bytes.decode_from(payload_cursor))
+      } else if child_type == stbl_type() && stbl_box is None {
+        stbl_box = Some(@bytes.decode_from(payload_cursor))
       } else {
         unknown_boxes.push(@bytes.decode_from(payload_cursor))
       }
@@ -92,6 +109,7 @@ pub impl @bytes.Decode for MinfBox with fn decode(cursor : @bytes.ReadCursor) ->
     {
       media_header,
       dinf_box: check_mandatory_box(dinf_box, "dinf", "minf"),
+      stbl_box: check_mandatory_box(stbl_box, "stbl", "minf"),
       unknown_boxes,
     }
   })
@@ -114,6 +132,7 @@ pub impl @bytes.Encode for MinfBox with fn encode(
       None => ()
     }
     @bytes.Encode::encode(self.dinf_box, payload)
+    @bytes.Encode::encode(self.stbl_box, payload)
     for unknown in self.unknown_boxes {
       @bytes.Encode::encode(unknown, payload)
     }
@@ -129,7 +148,8 @@ pub impl @box.BaseBox for MinfBox with fn box_type(_self) {
 }
 
 ///|
-/// メディアヘッダー（あれば）、`dinf`、続いて未知ボックス（ファイル順）を返す。
+/// メディアヘッダー（あれば）、`dinf`、`stbl`、続いて未知ボックス（ファイル順）を
+/// 返す。
 pub impl @box.BaseBox for MinfBox with fn children(self) {
   let children : Array[&@box.BaseBox] = []
   match self.media_header {
@@ -137,6 +157,7 @@ pub impl @box.BaseBox for MinfBox with fn children(self) {
     None => ()
   }
   children.push(self.dinf_box)
+  children.push(self.stbl_box)
   for unknown in self.unknown_boxes {
     children.push(unknown)
   }
