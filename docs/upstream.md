@@ -162,11 +162,24 @@ Issue 0007 で確定した対応の補足:
 | `codec_string::from_sample_entry` | RFC 6381 codecs 文字列 | `src/codec_string`（Issue 0011、完了。字幕系は 0028 まで `Unknown` 経由で unsupported） |
 | `descriptors::{EsDescriptor, DecoderConfigDescriptor, DecoderSpecificInfo, SlConfigDescriptor}` | MPEG-4 descriptor | `src/boxes`（Issue 0010 で `esds` とともに実装済み、0025 でも利用） |
 
+### Issue 0012 で確定した対応の補足
+
+| 上流 | MoonBit 側 | 備考 |
+| --- | --- | --- |
+| `demux::Mp4FileKind` | `Mp4FileKind::{Mp4, FragmentedMp4}`（`src/demux`） | `moov` 内の `mvex` の有無のみで判定する。現行の `MoovBox` は `mvex` を型付き field で持たないため `unknown_boxes` を走査する（`mvex`/`mehd`/`trex` の型付けは Issue 0017 で差し替える） |
+| `demux::Mp4FileKindDetector` | `Mp4FileKindDetector`（`src/demux`） | `new()` / `required_input()` / `handle_input(Input)` / `file_kind()` の同名 API。`required_input()` は検出後・エラー保持後に `None` を返す。`file_kind()` は `Mp4FileKind?` を返し、保持したエラーは `DemuxError` として raise する |
+| `demux::{RequiredInput, Input}` | 同名（`src/demux`） | `RequiredInput::{position : UInt64, size : UInt64?}`（`size=None` は EOF まで）、`Input::{position : UInt64, data : BytesView}`。`usize` を `UInt64` に写像した。`is_satisfied_by` / `to_input` / `Input::slice_range` も同名で移植。上流と同じく「要求位置を含み、要求終端（あれば）を含む」満足規則 |
+| `demux::DemuxError` | 同名（`src/demux`） | `DecodeError(@bytes.Mp4Error)` / `SampleTableError(@boxes.SampleTableAccessorError)` / `InvalidState(String)` / `InputRequired(RequiredInput)`。`input_required` helper と `to_string`（上流 `Display` 相当）も同名。上流は `From<Error>` で `Mp4Error` を自動変換するが、MoonBit 側は decode 呼び出しを `wrap_decode` で明示的に `DecodeError` に包む |
+| `usize::try_from(box_size)` 検査 | `max_usable_size`（`src/demux`） | Rust では `usize` 変換失敗時に `"ftyp box size exceeds usize::MAX"` / `"moov box size exceeds usize::MAX"`。MoonBit ではバッファ長が `Int` なので `Int` 最大値（0x7FFFFFFF）を上限として同じエラーを raise する（32bit 環境の上流と同じ意味） |
+| `MoovBox::mvex_box.is_some()` | `moov_box.unknown_boxes` 内の `mvex` box_type 走査（`src/demux`） | 判定論理は同一。`MoovBox` の `mvex` 型付けが入った時点で置き換える |
+| （対応型なし） | oracle `kind-detector-cases --moonbit`（`tools/oracle`） | 9 fixture + 合成ケース（non-faststart、未知 box、largesize、size=0、`moov` 未発見、offset オーバーフロー、ftyp 種別/サイズ異常）を上流検出器に通し、`required_input()` の要求列と最終結果（kind または classification/kind/box_type/reason）を凍結。golden は `src/demux/kind_detector_oracle_cases_test.mbt` と差分比較。`moov` より前の `mdat` payload を要求しないことも要求列で検証する |
+
 ### `demux` / `mux` / `bitstream`
 
 | 上流 | 概要 | MoonBit 側の対応（予定） |
 | --- | --- | --- |
-| `demux::{Mp4FileKind, Mp4FileKindDetector}` | MP4/fMP4 種別検出 | `src/demux`（Issue 0012） |
+| `demux::{Mp4FileKind, Mp4FileKindDetector}` | MP4/fMP4 種別検出 | `src/demux`（Issue 0012、完了） |
+| `demux::{Input, RequiredInput, DemuxError}` | 共有の入力契約 | `src/demux`（Issue 0012、完了。0013 の `Mp4FileDemuxer` と共用する） |
 | `demux::{Mp4FileDemuxer, Input, RequiredInput, Sample, TrackInfo, DemuxError}` | 通常 MP4 の Sans I/O demux | `src/demux`（Issue 0013） |
 | `demux::{Fmp4SegmentDemuxer, Fmp4FileDemuxer}` | fMP4 の demux | `src/demux`（Issue 0018/0019） |
 | `mux::{Mp4FileMuxer, Mp4FileMuxerOptions, Sample, TrackMetadata, FinalizedBoxes, MuxError, estimate_maximum_moov_box_size}` | 通常 MP4 の mux | `src/mux`（Issue 0022） |

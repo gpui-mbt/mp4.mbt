@@ -46,7 +46,7 @@
 
 | 機能 | 上流対応 | 状態 | 検証区分 |
 | --- | --- | --- | --- |
-| MP4/fMP4 file kind 検出 | `Mp4FileKindDetector` | Not started | Unit / oracle |
+| MP4/fMP4 file kind 検出 | `Mp4FileKindDetector` | Implemented（0012） | Unit / oracle / fixture |
 | 通常 MP4 file demux | `Mp4FileDemuxer` | Not started | Unit / oracle / fixture |
 | fMP4 segment demux | `Fmp4SegmentDemuxer` | Not started | Unit / oracle |
 | fMP4 file demux | `Fmp4FileDemuxer` | Not started | Unit / oracle |

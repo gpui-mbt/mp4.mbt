@@ -1,9 +1,9 @@
 # [P0 / M1] MP4／fMP4種別検出をRange I/Oで実装する
 
-Status: polished
+Status: done
 Model: DeepSeek V4.1 Flash Free
 Created: 2026-10-16
-Updated: 2026-10-16
+Updated: 2026-10-17
 Branch: feat/0012-file-kind-detector
 Priority: P0
 Milestone: M1
@@ -56,13 +56,13 @@ Upstream baseline: [shiguredo/mp4-rs@1282b704f44184ec792e1549b5d31e0c4c54dc59](h
 
 ## 受け入れ条件
 
-- [ ] Given 通常 MP4 fixture, when detector へ段階的に入力を与える, then `Mp4` を返す。
-- [ ] Given fMP4 fixture（`moov` に `mvex` あり）, when 判定する, then `FragmentedMp4` を返す。
-- [ ] Given non-faststart fixture（`moov` 末尾）, when 判定する, then 全文を読まずに確定し、要求 range が `mdat` payload を含まない（証跡付き）。
-- [ ] Given 巨大な `mdat` の宣言, when 判定する, then `mdat` の payload を読まずに次の box へ進む。
-- [ ] Given 必要範囲に足りない入力, when `handle_input` する, then 再要求（`InputRequired` 相当）になり、同一位置でデータが終わっていれば明示エラーになる。
-- [ ] Given 異常な box 長・`moov` なし・終端付近のオーバーフロー, when 判定する, then 固まらず明示エラーを返す。
-- [ ] Given 同じ fixture, when JS と Native で判定する, then 同じ `Mp4FileKind` になる。
+- [x] Given 通常 MP4 fixture, when detector へ段階的に入力を与える, then `Mp4` を返す。（oracle `fixture:*` 8 件 + `moov_at_end` ほか、unit test `detector is idempotent once detected`）
+- [x] Given fMP4 fixture（`moov` に `mvex` あり）, when 判定する, then `FragmentedMp4` を返す。（oracle `fixture:black-h264-fmp4.mp4` + `moov_at_end_fmp4`、unit test `fragmented mp4 is detected only via moov mvex`）
+- [x] Given non-faststart fixture（`moov` 末尾）, when 判定する, then 全文を読まずに確定し、要求 range が `mdat` payload を含まない（証跡付き）。（oracle `moov_at_end`/`moov_at_end_fmp4` の要求列 `[{0,32},{0,32},{32,32},{836,32},{836,791}]` — `mdat` の 804 バイト payload を要求せず `moov` range のみを読む。凍結 golden で固定）
+- [x] Given 巨大な `mdat` の宣言, when 判定する, then `mdat` の payload を読まずに次の box へ進む。（全 fixture の要求列が `mdat` range を含まないことを oracle と差分一致。largesize box は `largesize_box_before_moov` で網羅）
+- [x] Given 必要範囲に足りない入力, when `handle_input` する, then 再要求（`InputRequired` 相当）になり、同一位置でデータが終わっていれば明示エラーになる。（`available_bytes` で `slice_range` 失敗→`InputRequired`、要求位置からの短い入力→`invalid_data "input ended before the required range was available"`。unit test `short input at the required position reports truncation` + oracle `truncated_header`）
+- [x] Given 異常な box 長・`moov` なし・終端付近のオーバーフロー, when 判定する, then 固まらず明示エラーを返す。（oracle `invalid_box_size`/`moov_not_found`/`offset_overflow`/`zero_size_box_before_moov`/`ftyp_size_zero`/`not_ftyp_first` の 6 エラーを上流と文言一致で凍結。`moov`/`ftyp` の `Int` 上限超過は unit test で固定）
+- [x] Given 同じ fixture, when JS と Native で判定する, then 同じ `Mp4FileKind` になる。（`moon test --target js` / `--target native` で同一 golden 389/389 PASS）
 
 ## テスト計画
 
@@ -96,3 +96,7 @@ Upstream baseline: [shiguredo/mp4-rs@1282b704f44184ec792e1549b5d31e0c4c54dc59](h
 - 証跡ルール: checkbox は実際に実行した証拠がある項目だけ完了にする（0000 の進捗更新の規則 1）。要求 range のログを証跡として残す。
 - 実装時の未決事項: 公開 API 名、パッケージ配置、fuzz の実行環境は実装時に確定する。
 - 2026-10-16: 本文を実装可能な形式へ整備し、実装に着手可能なため polished へ更新。
+- 2026-10-17: 実装確定内容を追記。新規パッケージ `src/demux`。公開 API: `Mp4FileKind::{Mp4, FragmentedMp4}`、`Mp4FileKindDetector`（`new()`/`required_input()`/`handle_input(Input)`/`file_kind()`）、`RequiredInput`（`position`/`size: UInt64?`）、`Input`（`position`/`data: BytesView`）、`DemuxError::{DecodeError, SampleTableError, InvalidState, InputRequired}`（+ `input_required`/`to_string`）。`usize` は `UInt64` に写像し、`usize::try_from` 失敗相当は `Int` 最大値超過として同じ文言で raise（`max_usable_size`）。`MoovBox` は `mvex` を型付き field で持たないため `unknown_boxes` の `mvex` box_type 走査で判定（0017 で差し替え予定）。`handle_input` の受理規則・エラー保持・`required_input` 閉鎖は上流と同一。`wrap_decode` で `Mp4Error` を `DecodeError` に明示変換（上流 `From<Error>` 相当）。
+- 2026-10-17: oracle `kind-detector-cases --moonbit` を追加。9 fixture + 合成 13 ケース（`moov_at_end`/`moov_at_end_fmp4`/`unknown_box_before_moov`/`largesize_box_before_moov`/`moov_size_zero_last`/`moov_not_found`/`zero_size_box_before_moov`/`ftyp_size_zero`/`not_ftyp_first`/`truncated_header`/`offset_overflow`/`invalid_box_size`/`ftyp_largesize`）を上流 `Mp4FileKindDetector` に上流 doc 例と同じ駆動で通し、`required_input()` の要求列と最終結果を凍結（`src/demux/kind_detector_oracle_cases_test.mbt`、22 ケース）。`mdat` payload を要求しないことを要求列で検証。巨大 bytes literal は `moonbit_bytes_chunked`（4KiB 分割 `+` 連結）で警告閾値以下に抑えた。
+- 2026-10-17: 証跡（unit）: `moon test` 389/389 PASS、`moon test --target js` 389/389、`moon test --target native` 389/389。新規テスト: oracle 差分 1 件（22 ケースの要求列+結果の全件比較）+ black-box `mp4_file_kind_test.mbt` 6 件（初期要求、終端冪等、fMP4 検出、受理規則違反の `InvalidInput` 保持、短い入力の明示エラー、`moov` サイズ上限）+ `input_test.mbt` 4 件（`is_satisfied_by` 全分岐、`to_input`、`slice_range` 境界、`DemuxError` 表示）+ wbtest 1 件（`Phase` 遷移を直接検査）。`moon check` / `moon check --target js` は warning 0。`moon fmt` / `moon info` 実施、公開面は `src/demux/pkg.generated.mbti` の 4 型のみ。
+- 2026-10-17: 実装・検証・ドキュメントの全項目を完了し、done へ移行。

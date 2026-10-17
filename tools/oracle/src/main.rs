@@ -158,6 +158,10 @@ fn main() -> ExitCode {
             print!("{}", codec_string_moonbit_cases());
             ExitCode::SUCCESS
         }
+        Some("kind-detector-cases") if args.len() == 3 && args[2] == "--moonbit" => {
+            print!("{}", kind_detector_moonbit_cases());
+            ExitCode::SUCCESS
+        }
         _ => {
             eprintln!("usage: mp4-oracle demux <mp4-file>");
             eprintln!("       mp4-oracle box-headers");
@@ -180,6 +184,7 @@ fn main() -> ExitCode {
             eprintln!("       mp4-oracle sample-entries-fixtures --moonbit");
             eprintln!("       mp4-oracle codec-strings-cases");
             eprintln!("       mp4-oracle codec-strings-cases --moonbit");
+            eprintln!("       mp4-oracle kind-detector-cases --moonbit");
             ExitCode::from(2)
         }
     }
@@ -5277,6 +5282,322 @@ fn sample_entries_json_for_moov(moov: &MoovBox) -> String {
         ));
     }
     format!("[{}]", tracks.join(", "))
+}
+
+
+/// Splits `data` into top-level box byte ranges, using only the box headers.
+/// Stops at the first malformed/truncated header.
+fn top_level_box_ranges(data: &[u8]) -> Vec<(usize, usize, [u8; 4])> {
+    let mut out = Vec::new();
+    let mut offset = 0usize;
+    while offset + 8 <= data.len() {
+        let box_type: [u8; 4] = data[offset + 4..offset + 8].try_into().unwrap();
+        let size32 = u32::from_be_bytes(data[offset..offset + 4].try_into().unwrap()) as u64;
+        let end = if size32 == 0 {
+            data.len()
+        } else if size32 == 1 {
+            if offset + 16 > data.len() {
+                break;
+            }
+            let largesize = u64::from_be_bytes(data[offset + 8..offset + 16].try_into().unwrap());
+            offset.saturating_add(usize::try_from(largesize).unwrap_or(usize::MAX)).min(data.len())
+        } else {
+            offset.saturating_add(size32 as usize).min(data.len())
+        };
+        out.push((offset, end, box_type));
+        if end <= offset {
+            break;
+        }
+        offset = end;
+    }
+    out
+}
+
+/// Returns the raw bytes (header + payload) of the first top-level box of the
+/// given type in `data`.
+fn top_level_box_bytes(data: &[u8], wanted: &[u8; 4]) -> Vec<u8> {
+    for &(start, end, ref box_type) in &top_level_box_ranges(data) {
+        if box_type == wanted {
+            return data[start..end].to_vec();
+        }
+    }
+    Vec::new()
+}
+
+/// Case table for `kind-detector-cases`.
+///
+/// Covers the 9 upstream fixtures plus synthetic files exercising every
+/// detector edge: non-faststart ordering (moov at end), unknown boxes,
+/// largesize headers, size-0 boxes, missing moov, offset overflow, and
+/// malformed headers.
+fn kind_detector_cases() -> Vec<(String, Vec<u8>)> {
+    let mp4 = SAMPLE_TABLE_FIXTURES
+        .iter()
+        .find(|(name, _)| *name == "black-h264-video.mp4")
+        .expect("black-h264-video fixture")
+        .1;
+    let fmp4 = SAMPLE_TABLE_FIXTURES
+        .iter()
+        .find(|(name, _)| *name == "black-h264-fmp4.mp4")
+        .expect("black-h264-fmp4 fixture")
+        .1;
+    let ftyp = top_level_box_bytes(mp4, b"ftyp");
+    let mdat = top_level_box_bytes(mp4, b"mdat");
+    let moov = top_level_box_bytes(mp4, b"moov");
+    let moov_fmp4 = top_level_box_bytes(fmp4, b"moov");
+    assert!(!ftyp.is_empty() && !mdat.is_empty() && !moov.is_empty() && !moov_fmp4.is_empty());
+    let concat = |parts: &[&[u8]]| -> Vec<u8> { parts.concat() };
+
+    let mut cases: Vec<(String, Vec<u8>)> = Vec::new();
+    for &(name, data) in SAMPLE_TABLE_FIXTURES {
+        cases.push((format!("fixture:{name}"), data.to_vec()));
+    }
+
+    // non-faststart: moov at the very end, after a large mdat
+    cases.push(("moov_at_end".to_owned(), concat(&[&ftyp, &mdat, &moov])));
+    cases.push((
+        "moov_at_end_fmp4".to_owned(),
+        concat(&[&ftyp, &mdat, &moov_fmp4]),
+    ));
+
+    // unknown top-level box before moov (skipped by header size only)
+    let mut zzzz = Vec::new();
+    zzzz.extend_from_slice(&16u32.to_be_bytes());
+    zzzz.extend_from_slice(b"zzzz");
+    zzzz.extend_from_slice(&[0u8; 8]);
+    cases.push((
+        "unknown_box_before_moov".to_owned(),
+        concat(&[&ftyp, &zzzz, &moov]),
+    ));
+
+    // largesize-encoded box before moov
+    let mut large = Vec::new();
+    large.extend_from_slice(&1u32.to_be_bytes());
+    large.extend_from_slice(b"free");
+    large.extend_from_slice(&32u64.to_be_bytes());
+    large.extend_from_slice(&[0u8; 16]);
+    cases.push((
+        "largesize_box_before_moov".to_owned(),
+        concat(&[&ftyp, &large, &moov]),
+    ));
+
+    // moov encoded with size=0 (extends to EOF; must be last)
+    let mut moov_zero = moov.clone();
+    moov_zero[..4].copy_from_slice(&0u32.to_be_bytes());
+    cases.push((
+        "moov_size_zero_last".to_owned(),
+        concat(&[&ftyp, &mdat, &moov_zero]),
+    ));
+
+    // no moov at all -> "moov box not found before EOF"
+    cases.push(("moov_not_found".to_owned(), concat(&[&ftyp, &mdat])));
+
+    // size=0 non-moov box before moov -> unsupported
+    let zero_box = concat(&[&0u32.to_be_bytes(), b"free"]);
+    cases.push((
+        "zero_size_box_before_moov".to_owned(),
+        concat(&[&ftyp, &zero_box, &moov]),
+    ));
+
+    // ftyp encoded with size=0 -> explicit error
+    let mut ftyp_zero = ftyp.clone();
+    ftyp_zero[..4].copy_from_slice(&0u32.to_be_bytes());
+    cases.push(("ftyp_size_zero".to_owned(), concat(&[&ftyp_zero, &moov])));
+
+    // first top-level box is not ftyp
+    let mut free_box = Vec::new();
+    free_box.extend_from_slice(&16u32.to_be_bytes());
+    free_box.extend_from_slice(b"free");
+    free_box.extend_from_slice(&[0u8; 8]);
+    cases.push(("not_ftyp_first".to_owned(), concat(&[&free_box, &moov])));
+
+    // file shorter than a box header
+    cases.push(("truncated_header".to_owned(), ftyp[..10].to_vec()));
+
+    // largesize u64::MAX box before moov -> offset overflow
+    let mut huge = Vec::new();
+    huge.extend_from_slice(&1u32.to_be_bytes());
+    huge.extend_from_slice(b"xxxx");
+    huge.extend_from_slice(&u64::MAX.to_be_bytes());
+    cases.push(("offset_overflow".to_owned(), concat(&[&ftyp, &huge, &moov])));
+
+    // declared size smaller than the header
+    let mut bad_size = Vec::new();
+    bad_size.extend_from_slice(&4u32.to_be_bytes());
+    bad_size.extend_from_slice(b"abcd");
+    cases.push((
+        "invalid_box_size".to_owned(),
+        concat(&[&ftyp, &bad_size, &moov]),
+    ));
+
+    // ftyp itself encoded as a largesize box
+    let mut ftyp_large = Vec::new();
+    ftyp_large.extend_from_slice(&1u32.to_be_bytes());
+    ftyp_large.extend_from_slice(b"ftyp");
+    ftyp_large.extend_from_slice(&(ftyp.len() as u64 + 8).to_be_bytes());
+    ftyp_large.extend_from_slice(&ftyp[8..]);
+    cases.push(("ftyp_largesize".to_owned(), concat(&[&ftyp_large, &moov])));
+
+    cases
+}
+
+/// Drives `Mp4FileKindDetector` exactly like the upstream doc example: feeds
+/// `input[position..]` for each `required_input()` until a terminal state.
+/// Returns the full request log plus the final outcome.
+fn run_kind_detector(
+    input: &[u8],
+) -> (Vec<(u64, Option<u64>)>, Result<Option<Mp4FileKind>, DemuxError>) {
+    let mut detector = Mp4FileKindDetector::new();
+    let mut requests = Vec::new();
+    let mut steps = 0;
+    let outcome = loop {
+        match detector.required_input() {
+            Some(required) => {
+                steps += 1;
+                if steps > MAX_INPUT_STEPS {
+                    break Err(DemuxError::InvalidState(
+                        "input feeding did not terminate",
+                    ));
+                }
+                requests.push((required.position, required.size.map(|s| s as u64)));
+                detector.handle_input(input_at(input, required.position));
+            }
+            None => break detector.file_kind(),
+        }
+    };
+    (requests, outcome)
+}
+
+
+/// Renders bytes as `b"..."` literals split into <=4KiB chunks joined by `+`,
+/// to keep generated lines below the compiler's warning threshold.
+fn moonbit_bytes_chunked(data: &[u8]) -> String {
+    let mut parts = Vec::new();
+    for chunk in data.chunks(4096) {
+        parts.push(moonbit_bytes(chunk));
+    }
+    if parts.is_empty() {
+        parts.push("b\"\"".to_owned());
+    }
+    parts.join(" +\n      ")
+}
+
+/// `kind-detector-cases --moonbit` — request-log + outcome table for the
+/// MP4/fMP4 kind detector, consumed by `src/demux/kind_detector_oracle_test.mbt`.
+fn kind_detector_moonbit_cases() -> String {
+    let mut out = String::new();
+    let _ = writeln!(
+        out,
+        "// Generated by `cargo run -- kind-detector-cases --moonbit` (tools/oracle)."
+    );
+    let _ = writeln!(
+        out,
+        "// Source of truth: tools/oracle/src/main.rs (kind_detector_cases + SAMPLE_TABLE_FIXTURES)."
+    );
+    let _ = writeln!(out, "// Upstream: shiguredo/mp4-rs@{UPSTREAM_SHA}");
+    let _ = writeln!(
+        out,
+        "// DO NOT EDIT MANUALLY. Regenerate (canonical formatting is part of the file):"
+    );
+    let _ = writeln!(
+        out,
+        "//   (cd tools/oracle && cargo run -- kind-detector-cases --moonbit) \\\\"
+    );
+    let _ = writeln!(
+        out,
+        "//     > src/demux/kind_detector_oracle_cases_test.mbt"
+    );
+    let _ = writeln!(out, "//   moon fmt");
+    let _ = writeln!(out);
+    let _ = writeln!(out, "///|");
+    let _ = writeln!(
+        out,
+        "/// `tools/oracle` の `kind-detector-cases` が返すケース表（生成物）。"
+    );
+    let _ = writeln!(out, "///");
+    let _ = writeln!(
+        out,
+        "/// 型は `src/demux/kind_detector_oracle_test.mbt` で定義する。手で編集しない。"
+    );
+    let _ = writeln!(
+        out,
+        "let oracle_kind_detector_cases : Array[OracleKindDetectorCase] = ["
+    );
+    for (name, input) in &kind_detector_cases() {
+        let (requests, outcome) = run_kind_detector(input);
+        let _ = writeln!(out, "  {{");
+        let _ = writeln!(out, "    name: {},", moonbit_string(name));
+        let _ = writeln!(out, "    input: {},", moonbit_bytes_chunked(input));
+        let request_strs: Vec<String> = requests
+            .iter()
+            .map(|(position, size)| match size {
+                Some(size) => format!("{{ position: {position}, size: Some({size}) }}"),
+                None => format!("{{ position: {position}, size: None }}"),
+            })
+            .collect();
+        let _ = writeln!(out, "    requests: [{}],", request_strs.join(", "));
+        match &outcome {
+            Ok(Some(kind)) => {
+                let value = match kind {
+                    Mp4FileKind::Mp4 => "mp4",
+                    Mp4FileKind::FragmentedMp4 => "fragmented_mp4",
+                };
+                let _ = writeln!(out, "    outcome: \"{value}\",");
+                let _ = writeln!(out, "    classification: \"\",");
+                let _ = writeln!(out, "    error_kind: \"\",");
+                let _ = writeln!(out, "    box_type: \"\",");
+                let _ = writeln!(out, "    reason: \"\",");
+            }
+            Ok(None) => {
+                let _ = writeln!(out, "    outcome: \"unverified\",");
+                let _ = writeln!(out, "    classification: \"\",");
+                let _ = writeln!(out, "    error_kind: \"\",");
+                let _ = writeln!(out, "    box_type: \"\",");
+                let _ = writeln!(out, "    reason: \"\",");
+            }
+            Err(e) => {
+                let (classification, error_kind, box_type, reason) = match e {
+                    DemuxError::DecodeError(e) => (
+                        "decode_error",
+                        error_kind_str(e.kind).to_owned(),
+                        e.box_type
+                            .map(|t| t.to_string())
+                            .unwrap_or_default(),
+                        e.reason.clone(),
+                    ),
+                    DemuxError::SampleTableError(e) => (
+                        "sample_table_error",
+                        String::new(),
+                        String::new(),
+                        e.to_string(),
+                    ),
+                    DemuxError::InvalidState(m) => (
+                        "invalid_state",
+                        String::new(),
+                        String::new(),
+                        m.to_string(),
+                    ),
+                    DemuxError::InputRequired(r) => (
+                        "input_required",
+                        String::new(),
+                        String::new(),
+                        format!(
+                            "position={} size={:?}",
+                            r.position, r.size
+                        ),
+                    ),
+                };
+                let _ = writeln!(out, "    outcome: \"error\",");
+                let _ = writeln!(out, "    classification: \"{classification}\",");
+                let _ = writeln!(out, "    error_kind: \"{error_kind}\",");
+                let _ = writeln!(out, "    box_type: {},", moonbit_string(&box_type));
+                let _ = writeln!(out, "    reason: {},", moonbit_string(&reason));
+            }
+        }
+        let _ = writeln!(out, "  }},");
+    }
+    let _ = writeln!(out, "]");
+    out
 }
 
 #[cfg(test)]

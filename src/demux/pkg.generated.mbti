@@ -1,0 +1,66 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "gpui-mbt/mp4/demux"
+
+import {
+  "gpui-mbt/mp4/boxes",
+  "gpui-mbt/mp4/bytes",
+  "moonbitlang/core/debug",
+}
+
+// Values
+
+// Errors
+pub(all) suberror DemuxError {
+  DecodeError(@bytes.Mp4Error)
+  SampleTableError(@boxes.SampleTableAccessorError)
+  InvalidState(String)
+  InputRequired(RequiredInput)
+}
+pub fn DemuxError::input_required(UInt64, UInt64?) -> Self
+pub fn DemuxError::to_string(Self) -> String
+
+// Types and methods
+pub(all) struct Input {
+  position : UInt64
+  data : BytesView
+} derive(Eq, Hash, @debug.Debug)
+pub fn Input::equal(Self, Self) -> Bool
+pub fn Input::hash(Self) -> Int
+pub fn Input::hash_combine(Self, Hasher) -> Unit
+pub fn Input::not_equal(Self, Self) -> Bool
+pub fn Input::slice_range(Self, UInt64, UInt64?) -> BytesView?
+pub fn Input::to_repr(Self) -> @debug.Repr
+
+pub(all) enum Mp4FileKind {
+  Mp4
+  FragmentedMp4
+} derive(Eq, Hash, @debug.Debug)
+pub fn Mp4FileKind::equal(Self, Self) -> Bool
+pub fn Mp4FileKind::hash(Self) -> Int
+pub fn Mp4FileKind::hash_combine(Self, Hasher) -> Unit
+pub fn Mp4FileKind::not_equal(Self, Self) -> Bool
+pub fn Mp4FileKind::to_repr(Self) -> @debug.Repr
+
+pub struct Mp4FileKindDetector {
+  // private fields
+}
+pub fn Mp4FileKindDetector::file_kind(Self) -> Mp4FileKind? raise DemuxError
+pub fn Mp4FileKindDetector::handle_input(Self, Input) -> Unit
+pub fn Mp4FileKindDetector::new() -> Self
+pub fn Mp4FileKindDetector::required_input(Self) -> RequiredInput?
+
+pub(all) struct RequiredInput {
+  position : UInt64
+  size : UInt64?
+} derive(Eq, Hash, @debug.Debug)
+pub fn RequiredInput::equal(Self, Self) -> Bool
+pub fn RequiredInput::hash(Self) -> Int
+pub fn RequiredInput::hash_combine(Self, Hasher) -> Unit
+pub fn RequiredInput::is_satisfied_by(Self, Input) -> Bool
+pub fn RequiredInput::not_equal(Self, Self) -> Bool
+pub fn RequiredInput::to_input(Self, BytesView) -> Input
+pub fn RequiredInput::to_repr(Self) -> @debug.Repr
+
+// Type aliases
+
+// Traits
