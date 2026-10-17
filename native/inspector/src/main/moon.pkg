@@ -1,5 +1,6 @@
 import {
   "gpui-mbt/mp4/bytes",
+  "gpui-mbt/mp4/box",
   "gpui-mbt/mp4/boxes",
   "gpui-mbt/mp4/demux" @mp4_demux,
   "gpui-mbt/mp4/inspect",
@@ -10,6 +11,7 @@ import {
   "moonbitlang/core/env",
   "moonbitlang/async",
   "moonbitlang/async/fs",
+  "moonbitlang/async/shell",
 }
 
 supported_targets = "+native"

@@ -28,5 +28,10 @@ moon -C native/inspector run src/main --target native -- <file.mp4> --smoke
 
 - Portable model: implemented and tested.
 - gpui native host: implemented; `moon check` and window smoke PASS via
-  `sh native/inspector/run.sh <fixture> --smoke` (27 rows).
-- File picker, interaction, large-file range read / virtual list: **NOT_RUN**.
+  `sh native/inspector/run.sh <fixture> --smoke` (42 rows).
+- Range reads: only top-level headers, `moov`, demuxer ranges and the selected
+  sample hex payload are read. A 524 MB sparse MP4 read only 2,094 bytes in the
+  smoke test.
+- `--pick` opens the macOS file dialog (`osascript`); it is implemented but
+  not exercised in the non-interactive verification session.
+- Interactive scroll / full virtual list: NOT_RUN (the current window renders a bounded 40-row sample window).

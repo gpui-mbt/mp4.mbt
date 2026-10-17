@@ -121,4 +121,6 @@ Upstream baseline: [shiguredo/mp4-rs@1282b704f44184ec792e1549b5d31e0c4c54dc59](h
 - `src/inspect` の portable view model と `native/inspector`（gpui.mbt host、`SceneItem::text`）を追加した。
 - `moon check`（`src/inspect`）と `moon -C native/inspector check` は PASS。
 - `sh native/inspector/run.sh <fixture> --smoke` で window smoke を実行し、27 行の描画に成功（PASS）。gpui の macOS dylib をビルドして `GPUI_MACOS_LIBRARY` を設定する手順を `native/inspector/run.sh` に固定した。
-- ファイルピッカー、range read / virtual list、大容量 read 計測は未実行（NOT_RUN）。
+- 524 MB の sparse MP4 で smoke を実行し、read 2,094 bytes（全量読み込みなし）を確認（PASS）。
+- `--pick` による macOS ファイルダイアログを実装（非対話セッションのため実行は未確認）。
+- 対話スクロール / 全件 virtual list は未実装（先頭 40 件の bounded window）。

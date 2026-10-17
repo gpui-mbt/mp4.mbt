@@ -14,7 +14,8 @@ Google Chrome 155.0.8059.84 for browser E2E.
 | Format | `moon fmt --check` | clean |
 | Public API | `moon info` | no diff |
 | Native inspector module | `moon -C native/inspector check` | clean |
-| Native inspector window smoke | `sh native/inspector/run.sh <fixture> --smoke --status /tmp/status.txt` | PASS, 27 rows |
+| Native inspector window smoke | `sh native/inspector/run.sh <fixture> --smoke --status /tmp/status.txt` | PASS, 42 rows, 11 reads / 2,094 bytes |
+| Large-file no-full-read | 524 MB sparse `free` MP4, same smoke | PASS, 2,094 bytes read (< 0.001% of file) |
 | Oracle unit tests | `cd tools/oracle && cargo test` | 23 passed |
 | Oracle goldens | `moon run tools/oracle/regenerate_fixtures.mbtx -- --check` | 9/9 unchanged |
 | Diff lab (Node) | `node web/run_lab.mjs` | 9 fixtures PASS |
@@ -39,7 +40,6 @@ Notes:
 | Check | Reason |
 | --- | --- |
 
-| Native inspector file picker / scroll / hex interaction | Not implemented yet; the host renders the portable rows. |
-| Large-file (500 MB+) no-full-read measurement | Not measured. |
+| Native inspector file picker | Implemented with `--pick` via the macOS file dialog; not exercised in this non-interactive session. |
 | CI-run browser E2E | Playwright browsers are not downloaded in CI; the E2E is a local/manual check. |
 | Performance regression thresholds | Only a single-machine baseline was captured. |

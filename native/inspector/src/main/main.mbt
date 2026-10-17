@@ -1,5 +1,5 @@
-// gpui.mbt Native MP4 Inspector（最小実装）。
-// 起動引数の MP4 を読み、box tree / track / sample の先頭行を描画する。
+// gpui.mbt Native MP4 Inspector。
+// moov / track / sample metadata だけを range read し、全ファイルを読み込まない。
 
 ///|
 fn inspector_rect(x : Double, y : Double, w : Double, h : Double) -> @primitives.Rect {
@@ -81,49 +81,131 @@ fn inspector_scene(
 }
 
 ///|
-async fn read_file_bytes(path : String) -> Bytes raise {
-  let data = @fs.read_file(path)
-  data.binary()
+/// range read の回数と総バイト数。
+struct ReadStats {
+  mut reads : Int
+  mut bytes : UInt64
 }
 
 ///|
-fn feed_demuxer(demuxer : @mp4_demux.Mp4FileDemuxer, data : Bytes) -> Unit {
-  while demuxer.required_input() is Some(required) {
-    let start = required.position.to_int()
-    let end = match required.size {
-      Some(size) => {
-        let e = start + size.to_int()
-        if e > data.length() { data.length() } else { e }
-      }
-      None => data.length()
+/// 1 回のファイル読み取りを記録する。
+async fn read_at(
+  file : @fs.File,
+  stats : ReadStats,
+  position : Int64,
+  size : Int,
+) -> Bytes {
+  if size <= 0 {
+    return b""
+  }
+  let bytes = file.read_exactly_at(size, position=position) catch {
+    _ => b""
+  }
+  stats.reads = stats.reads + 1
+  stats.bytes = stats.bytes + bytes.length().to_uint64()
+  bytes
+}
+
+///|
+/// ファイル先頭から top-level box を走査し、moov の部分木だけを読む。
+async fn box_rows_from_file(
+  file : @fs.File,
+  file_size : Int64,
+  stats : ReadStats,
+) -> Array[String] {
+  let rows : Array[String] = []
+  let mut offset : Int64 = 0
+  while offset + 8L <= file_size {
+    let header_bytes = read_at(file, stats, offset, 32)
+    if header_bytes.length() < 8 {
+      break
     }
-    let chunk = if start >= data.length() {
-      b""
+    let header : @box.BoxHeader = @bytes.decode_from(
+      @bytes.ReadCursor::from_view(header_bytes[:], offset.reinterpret_as_uint64()),
+    ) catch {
+      _ => break
+    }
+    let declared = header.box_size().get()
+    let box_size : Int64 = if declared == 0UL {
+      file_size - offset
     } else {
-      @bytes.ReadCursor::from_view(data[start:end], 0UL).read_remaining() catch {
-        _ => abort("invalid bytes")
-      }
+      declared.reinterpret_as_int64()
     }
+    if box_size < 8L || offset + box_size > file_size {
+      break
+    }
+    if header.box_type().as_bytes() == b"moov" {
+      let moov_bytes = read_at(file, stats, offset, box_size.to_int())
+      if moov_bytes.length().to_int64() == box_size {
+        let cursor = @bytes.ReadCursor::from_view(
+          moov_bytes[:],
+          offset.reinterpret_as_uint64(),
+        )
+        let tree = @boxes.build_box_tree(cursor) catch {
+          _ => []
+        }
+        for row in @inspect.box_rows(tree) {
+          rows.push(row)
+        }
+      }
+      break
+    }
+    offset = offset + box_size
+  }
+  rows
+}
+
+///|
+/// Sans I/O demuxer に range read で入力を供給する。
+async fn feed_demuxer(
+  file : @fs.File,
+  file_size : Int64,
+  demuxer : @mp4_demux.Mp4FileDemuxer,
+  stats : ReadStats,
+) -> Unit {
+  while demuxer.required_input() is Some(required) {
+    let position = required.position.reinterpret_as_int64()
+    let remaining = if file_size > position { file_size - position } else { 0L }
+    let size : Int64 = match required.size {
+      Some(size) => {
+        let wanted = size.reinterpret_as_int64()
+        if wanted > remaining { remaining } else { wanted }
+      }
+      None => if remaining > 1048576L { 1048576L } else { remaining }
+    }
+    let data = read_at(file, stats, position, size.to_int())
     demuxer.handle_input(
-      @mp4_demux.Input::{ position: required.position, data: chunk[:] },
+      @mp4_demux.Input::{ position: required.position, data: data[:] },
     )
   }
 }
 
 ///|
-async fn build_lines(path : String) -> Array[String] {
-  let data = read_file_bytes(path) catch {
-    _ => return ["cannot read: " + path]
-  }
+async fn build_lines(
+  path : String,
+  status_path : String?,
+) -> Array[String] {
   let lines : Array[String] = ["file: " + path]
-  let tree = @boxes.build_box_tree(@bytes.ReadCursor::new(data)) catch {
-    _ => []
+  let file = @fs.open(path, mode=ReadOnly) catch {
+    _ => {
+      lines.push("cannot open file")
+      return lines
+    }
   }
-  for row in @inspect.box_rows(tree) {
+  defer file.close()
+  let file_size = file.size() catch {
+    _ => {
+      lines.push("cannot stat file")
+      return lines
+    }
+  }
+  let stats : ReadStats = { reads: 0, bytes: 0UL }
+  lines.push("size: \{file_size} bytes")
+  for row in box_rows_from_file(file, file_size, stats) {
     lines.push(row)
   }
   let demuxer = @mp4_demux.Mp4FileDemuxer::new()
-  feed_demuxer(demuxer, data)
+  feed_demuxer(file, file_size, demuxer, stats)
   let tracks = demuxer.tracks() catch {
     _ => []
   }
@@ -131,7 +213,7 @@ async fn build_lines(path : String) -> Array[String] {
     lines.push(row)
   }
   let samples : Array[@mp4_demux.Sample] = []
-  while true {
+  while samples.length() < 100000 {
     let next = demuxer.next_sample() catch {
       @mp4_demux.InputRequired(_) => None
       _ => None
@@ -143,8 +225,37 @@ async fn build_lines(path : String) -> Array[String] {
       None => break
     }
   }
+  // 仮想リスト: 画面には先頭 40 件だけを描画する。
   for row in @inspect.sample_rows(samples, 0, 40) {
     lines.push(row)
+  }
+  if samples.length() > 0 {
+    let sample = samples[0]
+    let hex_size = if sample.data_size > 256U {
+      256
+    } else {
+      sample.data_size.reinterpret_as_int()
+    }
+    let payload = read_at(
+      file,
+      stats,
+      sample.data_offset.reinterpret_as_int64(),
+      hex_size,
+    )
+    for row in @inspect.hex_dump(payload, 16) {
+      lines.push("hex: " + row)
+    }
+  }
+  lines.push(
+    "samples: \{samples.length()} (rendered 40), reads: \{stats.reads}, read_bytes: \{stats.bytes}, file_bytes: \{file_size}",
+  )
+  match status_path {
+    Some(path) =>
+      @fs.write_file(
+        path,
+        "ok rows=\{lines.length()} samples=\{samples.length()} reads=\{stats.reads} bytes=\{stats.bytes} file=\{file_size}",
+      )
+    None => ()
   }
   lines
 }
@@ -159,7 +270,7 @@ async fn write_status(path : String?, text : String) -> Unit {
 
 ///|
 async fn run(smoke : Bool, path : String, status_path : String?) -> Unit {
-  let lines = build_lines(path)
+  let lines = build_lines(path, status_path)
   let host = match @macos.Host::start() {
     Ok(host) => host
     Err(e) => {
@@ -184,7 +295,7 @@ async fn run(smoke : Bool, path : String, status_path : String?) -> Unit {
       return
     }
   }
-  let (window_width, window_height, _scale) = match host.window_metrics(window) {
+  let (window_width, window_height, scale) = match host.window_metrics(window) {
     Ok(metrics) => metrics
     Err(e) => {
       write_status(
@@ -194,7 +305,7 @@ async fn run(smoke : Bool, path : String, status_path : String?) -> Unit {
       return
     }
   }
-  let snapshot = inspector_scene(window_width, window_height, _scale, lines)
+  let snapshot = inspector_scene(window_width, window_height, scale, lines)
   match host.present(window, snapshot) {
     Ok(_) => ()
     Err(e) => {
@@ -214,7 +325,6 @@ async fn run(smoke : Bool, path : String, status_path : String?) -> Unit {
       Ok(_) => ()
       Err(_) => ()
     }
-    write_status(status_path, "ok rows=\{lines.length()}")
     println("inspector smoke: rows=\{lines.length()}")
     return
   }
@@ -248,9 +358,27 @@ async fn run(smoke : Bool, path : String, status_path : String?) -> Unit {
 }
 
 ///|
+async fn pick_file() -> String {
+  let output = @shell.Cmd(
+    "osascript",
+    [
+      "-e",
+      "POSIX path of (choose file with prompt \"Select an MP4\" of type {\"public.mpeg-4\"})",
+    ],
+  ).output() catch {
+    _ => return ""
+  }
+  if output.exit_code() != 0 {
+    return ""
+  }
+  output.stdout().trim().to_owned()
+}
+
+///|
 async fn main {
   let args = @env.args()
   let smoke = args.contains("--smoke")
+  let pick = args.contains("--pick")
   let mut path = ""
   let mut status_path : String? = None
   let mut i = 1
@@ -258,13 +386,16 @@ async fn main {
     if args[i] == "--status" && i + 1 < args.length() {
       status_path = Some(args[i + 1])
       i = i + 1
-    } else if args[i] != "--smoke" {
+    } else if args[i] != "--smoke" && args[i] != "--pick" {
       path = args[i]
     }
     i = i + 1
   }
+  if path == "" && pick {
+    path = pick_file()
+  }
   if path == "" {
-    println("usage: inspector <file.mp4> [--smoke]")
+    println("usage: inspector <file.mp4> [--pick] [--smoke] [--status PATH]")
     return
   }
   run(smoke, path, status_path) catch {
