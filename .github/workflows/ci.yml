@@ -117,6 +117,9 @@ jobs:
           cargo run --quiet -- moov-tree-fixtures --moonbit > ../../src/boxes/moov_tree_oracle_fixtures_test.mbt
           cargo run --quiet -- sample-tables-cases --moonbit > ../../src/boxes/sample_table_oracle_cases_test.mbt
           cargo run --quiet -- sample-tables-fixtures --moonbit > ../../src/boxes/sample_table_oracle_fixtures_test.mbt
+          cargo run --quiet -- codec-strings-cases --moonbit > ../../src/codec_string/codec_string_oracle_cases_test.mbt
+          cargo run --quiet -- kind-detector-cases --moonbit > ../../src/demux/kind_detector_oracle_cases_test.mbt
+          cargo run --quiet -- demux-cases --moonbit > ../../src/demux/mp4_file_demux_oracle_cases_test.mbt
       - name: Verify generated oracle tables are current and formatted
         run: |
           moon fmt
@@ -127,12 +130,40 @@ jobs:
             src/boxes/moov_tree_oracle_cases_test.mbt \
             src/boxes/moov_tree_oracle_fixtures_test.mbt \
             src/boxes/sample_table_oracle_cases_test.mbt \
-            src/boxes/sample_table_oracle_fixtures_test.mbt
-          printf 'generated oracle tables are in sync (box-headers: %s cases, box-tree: %s cases, box-tree fixtures: %s, moov-tree: %s cases, moov-tree fixtures: %s, sample-tables: %s cases, sample-tables fixtures: %s)\n' \
+            src/boxes/sample_table_oracle_fixtures_test.mbt \
+            src/codec_string/codec_string_oracle_cases_test.mbt \
+            src/demux/kind_detector_oracle_cases_test.mbt \
+            src/demux/mp4_file_demux_oracle_cases_test.mbt
+          printf 'generated oracle tables are in sync (box-headers: %s cases, box-tree: %s cases, box-tree fixtures: %s, moov-tree: %s cases, moov-tree fixtures: %s, sample-tables: %s cases, sample-tables fixtures: %s, codec-strings: %s cases, kind-detector: %s cases, demux: %s cases)\n' \
             "$(grep -c '    name: ' src/box/box_header_oracle_cases_test.mbt)" \
             "$(grep -c '    name: ' src/boxes/box_tree_oracle_cases_test.mbt)" \
             "$(grep -c '    name: ' src/boxes/box_tree_oracle_fixtures_test.mbt)" \
             "$(grep -c '    name: ' src/boxes/moov_tree_oracle_cases_test.mbt)" \
             "$(grep -c '    name: ' src/boxes/moov_tree_oracle_fixtures_test.mbt)" \
             "$(grep -c '    name: ' src/boxes/sample_table_oracle_cases_test.mbt)" \
-            "$(grep -c '    name: ' src/boxes/sample_table_oracle_fixtures_test.mbt)"
+            "$(grep -c '    name: ' src/boxes/sample_table_oracle_fixtures_test.mbt)" \
+            "$(grep -c '    name: ' src/codec_string/codec_string_oracle_cases_test.mbt)" \
+            "$(grep -c '    name: ' src/demux/kind_detector_oracle_cases_test.mbt)" \
+            "$(grep -c '    name: ' src/demux/mp4_file_demux_oracle_cases_test.mbt)"
+
+  demux-cli:
+    name: demux-cli (native smoke)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+      - name: Record toolchain versions
+        run: moon version --all
+      - name: Run demux example on checked-in fixtures
+        run: |
+          moon run src/examples/demux --target native -- tests/fixtures/upstream/black-h264-video.mp4
+          moon run src/examples/demux --target native -- tests/fixtures/upstream/beep-aac-audio.mp4 --json --max-samples 3
+          moon run src/examples/demux --target native -- tests/fixtures/upstream/beep-aac-audio.mp4 --max-samples 0
+      - name: Verify exit codes for failure paths
+        run: |
+          moon run src/examples/demux --target native -- /does/not/exist.mp4 && exit 1; [ $? -eq 3 ]
+          moon run src/examples/demux --target native -- README.md && exit 1; [ $? -eq 5 ]
+          moon run src/examples/demux --target native -- tests/fixtures/upstream/black-h264-video.mp4 --buffer-size 100 && exit 1; [ $? -eq 4 ]

@@ -191,6 +191,21 @@ Issue 0007 で確定した対応の補足:
 | `handler_type` → `TrackKind` | `HdlrBox::track_kind()`（`src/boxes`） | `vide` / `soun` / `subt` / `text` → `Video` / `Audio` / `Subtitle`、それ以外は `None` でトラックを skip（上流と同じく panic しない） |
 | （対応型なし） | oracle `demux-cases --moonbit`（`tools/oracle`） | 9 fixture + 上流 `Mp4FileMuxer` で生成した合成ファイル（video+audio の timescale 跨ぎ、audio 先頭 tie-break、`ctts` v0/v1、字幕 `stpp`、未知 `hdlr`、faststart、空 `moov`、`stsz` 不整合、`moov` 欠落、size 0 `ftyp`、先頭非 `ftyp`）を上流 demuxer に通し、要求列・track 行・前後両方向の sample 行・`seek` プローブ結果・エラー分類を凍結。golden は `src/demux/mp4_file_demux_oracle_cases_test.mbt`、driver は `mp4_file_demux_oracle_test.mbt`。上流 `Error` の `reason` が常に空の `insufficient_buffer` だけ比較時に正規化する（MoonBit 側は診断文を持つ） |
 
+### Issue 0014 で確定した対応の補足
+
+`examples/demux.rs`（上流リポジトリ）→ `src/examples/demux`（本リポジトリの native 実行パッケージ、`gpui-mbt/mp4/examples/demux`）。ライブラリ API ではなく実行物の移植なので、ここでは API 対応ではなく動作規約を記録する。
+
+| 上流 | MoonBit 側 | 備考 |
+| --- | --- | --- |
+| `examples/demux.rs` | `src/examples/demux`（`moon run src/examples/demux --target native -- <file>`） | `required_input()` 駆動で絶対位置 seek/read するアダプタ構造は同じ。`async fn main` + `moonbitlang/async/fs` の `File::read_exactly_at` で実現。demuxer コア（`src/demux`）は引き続き Sans I/O で、fs 依存はこの実行パッケージのみに閉じる |
+| 1MB 固定バッファ + `min(request_size, buf.len())` による切り詰め | `--buffer-size`（既定 1048576）+ `CliError::RequestTooLarge` | 上流は要求サイズをバッファ長で切り詰めるが、`size=Some(n)` の要求に対しては全レンジを渡すのが demuxer の契約であり、切り詰めは契約違反になり得る。本実装は上限超過の `Some(n)` 要求を明示エラー（exit 4）にし、契約違反の入力を渡さない。`size=None`（EOF まで）の要求だけ上流と同じく `min(残り, 上限)` で読む（`is_satisfied_by` が位置のみを要求するため契約内） |
+| 先頭 10 件のサンプル表示 | `--max-samples`（既定 10） | 上流の固定値 10 を既定として採用。`0` は track メタデータのみ表示 |
+| テキスト出力のみ | テキスト + `--json` | テキストは upstream 相当 + `Kind` / `Sample entry` / `Keyframe` / `Composition time offset` の追加列。JSON はリポジトリのデータ契約に従い 64bit 値（`duration` / `timestamp` / `composition_time_offset` / `data_offset`）を十進文字列で出力する（JS 消費者の精度劣化防止） |
+| `main` の暗黙 exit 0 / panic | `CliError` + 固定終了コード | `0` 正常 / `2` 引数不正 / `3` I/O（open 失敗・予期しない EOF）/ `4` 要求レンジが上限超過 / `5` demux エラー。エラーは `error: <msg>` の 1 行で stderr に統一出力し、panic させない |
+| `std::process::exit` 未使用（自動 0） | `extern "c" fn exit`（`c_exit`） | native 実行ファイルの終了コード制御は `moonbitlang/core/argparse` と同じ `extern "c" "exit"` FFI で行う |
+
+- `moon.mod` の import に `moonbitlang/async@0.22.5` を追加した。依存は `src/examples/demux` のみで、コアパッケージ群（`bytes`/`box`/`boxes`/`codec_string`/`demux`）の Sans I/O・依存方向（`bytes <- box <- boxes <- demux`）は不変。
+
 ### `demux` / `mux` / `bitstream`
 
 | 上流 | 概要 | MoonBit 側の対応（予定） |
@@ -250,6 +265,7 @@ Issue 0007 で確定した対応の補足:
 
 ## 7. 更新履歴
 
+- 2026-10-18: Issue 0014（demux CLI サンプル）の対応表を追記。`examples/demux.rs` → `src/examples/demux`（native 実行パッケージ）、`required_input` 駆動の seek/read アダプタ、上流のバッファ切り詰めに対する `RequestTooLarge` の明示化、`--max-samples` / `--json` / `--buffer-size`、固定終了コード（0/2/3/4/5）、64bit の JSON 十進文字列規約、`moonbitlang/async` 依存の追加（実行パッケージ限定）を記録。
 - 2026-10-18: Issue 0013（通常 MP4 demuxer）の対応表を追記。`Mp4FileDemuxer` の同名 API（`prev_sample` / `seek` / `Duration` 含む）、`TrackInfo` / `Sample`、`(secs, nanos)` 辞書順の整数タイムスタンプ比較、エラー保持の take セマンティクス、未知 `hdlr` の skip、offset 加算の防御検査、oracle `demux-cases`（muxer 生成の合成入力を含む）を記録。
 - 2026-10-17: Issue 0011（codec string）の対応表を追記。`codec_string::from_sample_entry` → `src/codec_string` の同名関数、各 binding の書式規則（HEVC Annex E の bit-reverse / constraint 末尾省略、AV1 bit depth 分岐、AOT 31 エスケープ）、`H264ProfileLevelId` の未移植部分、字幕 entry の一時差（unsupported）、oracle `codec-strings-cases` を記録。
 - 2026-10-17: Issue 0010（型付き video/audio sample entry）の対応表を追記。`Uint<T,BITS,OFFSET>` の実行時フィールド化、`NonZeroU16`、u16.u16 unsigned ヘルパー、`Visual`/`AudioSampleEntryFields`、9 つの型付き `SampleEntry` variant と設定 box 群、descriptor/`EsdsBox`、字幕 entry の `Unknown` 継続（0028 までの一時差）、`avcC` decode/encode 非対称、oracle `sample-entries` 系モードを記録。

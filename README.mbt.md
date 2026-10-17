@@ -29,12 +29,68 @@ Rust oracle as the default criterion.
 
 ## Usage
 
-The end-to-end demux API is not implemented yet (M1 in progress). The foundation packages are
+### Demux CLI (native)
+
+A `moon run` executable port of upstream `examples/demux.rs` lives at
+`src/examples/demux` (native target only; the demuxer core stays Sans I/O — only
+this package touches the filesystem):
+
+```bash
+moon run src/examples/demux --target native -- <file.mp4>
+moon run src/examples/demux --target native -- <file.mp4> --json --max-samples 20
+```
+
+- `<file.mp4>`: MP4 file path (required)
+- `--max-samples <N>`: number of leading samples to print (default `10`; `0` prints
+  track metadata only)
+- `--json`: emit JSON instead of text. 64-bit values (`duration`, `timestamp`,
+  `composition_time_offset`, `data_offset`) are decimal **strings**, so they survive
+  JavaScript JSON consumers without precision loss
+- `--buffer-size <bytes>`: maximum bytes read for a single `required_input` range
+  (default `1048576`, matching upstream's 1 MiB buffer). Unlike upstream, a
+  `required_input.size` request larger than this limit fails explicitly with exit
+  code `4` instead of silently truncating the requested range
+
+Exit codes: `0` success, `2` invalid arguments, `3` I/O error (missing file,
+unexpected EOF), `4` required range exceeds `--buffer-size`, `5` demux error.
+
+Example output:
+
+```text
+Found 1 track
+
+Track 1:
+  Track ID: 1
+  Kind: video
+  Duration: 512 (timescale: 12800)
+
+Samples:
+  Sample 1:
+    Track ID: 1
+    Sample entry: avc1
+    Keyframe: true
+    Timestamp: 0
+    Duration: 512
+    Composition time offset: none
+    Data offset: 0x30
+    Data size: 796 bytes
+```
+
+### Library
+
+The Sans I/O demuxer for normal MP4 files lives in `gpui-mbt/mp4/demux`
+(`Mp4FileDemuxer`, `Mp4FileKindDetector`, `RequiredInput`/`Input`,
+`TrackInfo`, `Sample`, `Duration`, `DemuxError`). Callers feed exactly the
+absolute byte ranges the demuxer asks for via `required_input()` — the library
+itself performs no I/O.
+
+The foundation packages are
 `gpui-mbt/mp4/bytes` (bounds-safe Big Endian cursors, `Mp4Error` classification, `ParseLimits`,
 `FourCC`, `BoxType`/`Uuid`, `Decode`/`Encode`), `gpui-mbt/mp4/bitstream` (MSB-first
 `BitReader`/`BitWriter`), `gpui-mbt/mp4/box` (box envelope: `BoxHeader`/`BoxSize`,
-`FullBox` headers) and `gpui-mbt/mp4/boxes` (root boxes `ftyp`/`free`/`mdat` and the
-header-level box tree walker):
+`FullBox` headers) and `gpui-mbt/mp4/boxes` (root boxes `ftyp`/`free`/`mdat`, the
+box tree walker, `moov`/`stbl` tables, `SampleTableAccessor` and typed sample
+entries):
 
 ```mbt nocheck
 ///|

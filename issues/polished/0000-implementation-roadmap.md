@@ -179,7 +179,7 @@ M1 では**動画そのものの再生や変換**を UI に表示できなくて
 - [x] [0011 RFC 6381 codec stringをSampleEntryから生成する](../done/0011-codec-strings.md) — P1 / deps: 0010
 - [x] [0012 MP4／fMP4種別検出をRange I/Oで実装する](../done/0012-file-kind-detector.md) — P0 / deps: 0007, 0008
 - [x] [0013 Sans I/O通常MP4 Demuxerを移植する](../done/0013-mp4-file-demux.md) — P0 / deps: 0009, 0010, 0012
-- [ ] [0014 上流demux.rs相当のCLIサンプルを作る](./0014-demux-example.md) — P0 / deps: 0013, 0004
+- [x] [0014 上流demux.rs相当のCLIサンプルを作る](../done/0014-demux-example.md) — P0 / deps: 0013, 0004
 - [ ] [0015 MoonBit/JSのブラウザMP4 Dumpデモを作る](./0015-web-mp4-dump.md) — P0 / deps: 0013, 0014
 - [ ] [0016 同一MP4でRust/WASMとMoonBitの差分を可視化する](./0016-rust-moonbit-diff.md) — P1 / deps: 0004, 0015
 

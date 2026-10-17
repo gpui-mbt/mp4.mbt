@@ -48,6 +48,7 @@
 | --- | --- | --- | --- |
 | MP4/fMP4 file kind 検出 | `Mp4FileKindDetector` | Implemented（0012） | Unit / oracle / fixture |
 | 通常 MP4 file demux | `Mp4FileDemuxer` | Implemented（0013） | Unit / oracle / fixture |
+| Native demux CLI | `examples/demux.rs` 相当（`src/examples/demux`） | Implemented（0014） | Unit / fixture E2E / CI smoke |
 | fMP4 segment demux | `Fmp4SegmentDemuxer` | Not started | Unit / oracle |
 | fMP4 file demux | `Fmp4FileDemuxer` | Not started | Unit / oracle |
 | 通常 MP4 file mux | `Mp4FileMuxer` | Not started | Unit / interop |

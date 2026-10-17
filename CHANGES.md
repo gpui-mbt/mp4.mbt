@@ -8,6 +8,20 @@ versions (`M0`–`M5`); unreleased work is listed under `Unreleased`.
 
 ### Added
 
+- Native demux CLI example (issue 0014): `src/examples/demux` ports upstream
+  `examples/demux.rs` as a native-only executable
+  (`moon run src/examples/demux --target native -- <file.mp4>`). The Sans I/O
+  `Mp4FileDemuxer` is driven by `required_input` absolute ranges read via
+  `moonbitlang/async/fs` `File::read_exactly_at`; only this package touches the
+  filesystem. Options: `--max-samples` (default 10), `--json` (64-bit values as
+  decimal strings), `--buffer-size` (default 1048576, upstream's 1 MiB buffer;
+  a `required_input.size` request above it fails explicitly instead of
+  truncating the range like upstream does). Fixed exit codes: 0/2/3/4/5.
+  `moon.mod` gains `moonbitlang/async@0.22.5` (example package only — core
+  packages stay dependency-free Sans I/O). CI gains a `demux-cli` smoke job
+  and now verifies the `codec-strings`/`kind-detector`/`demux` oracle case
+  tables alongside the older modes (issue 0014).
+
 - Sample tables and the sample table accessor (issue 0009): `src/boxes` gains
   the typed `stbl` subtree (`StblBox`, `StsdBox`, `SampleEntry` (unknown-only
   until 0010), `SttsBox` with `from_sample_deltas`, `CttsBox`, `CslgBox`,

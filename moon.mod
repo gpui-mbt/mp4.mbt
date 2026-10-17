@@ -18,3 +18,7 @@ description = "Dependency-free, Sans I/O MP4/ISOBMFF mux/demux library (MoonBit 
 source = "src"
 
 preferred_target = "js"
+
+import {
+  "moonbitlang/async@0.22.5",
+}

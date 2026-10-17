@@ -1,6 +1,6 @@
 # [P0 / M1] 上流demux.rs相当のCLIサンプルを作る
 
-Status: polished
+Status: done
 Model: DeepSeek V4.1 Flash Free
 Created: 2026-10-16
 Updated: 2026-10-16
@@ -57,15 +57,15 @@ Upstream baseline: [shiguredo/mp4-rs@1282b704f44184ec792e1549b5d31e0c4c54dc59](h
 
 ## 受け入れ条件
 
-- [ ] Given 0004 の fixture, when CLI を実行する, then track 一覧と先頭 N サンプルが上流 example 相当の情報で表示され、0013 の結果と一致する。
-- [ ] Given 先頭 10 件 / 全件 / `--max-samples 0`, when 実行する, then それぞれ表示数が期待どおりで exit code 0 になる。
-- [ ] Given `--json`, when 実行する, then 64bit offset が十進文字列で出力され、値が丸められない。
-- [ ] Given 存在しないパス, when 実行する, then 非ゼロ exit で stderr に統一形式のエラーを出す（panic しない）。
-- [ ] Given 非 MP4・空・途中切断のファイル, when 実行する, then 統一されたエラー表示と非ゼロ exit になる。
-- [ ] Given 要求範囲が 1MB を超える fixture, when 実行する, then `handle_input` 契約違反にならず、明示エラー（または上限内の結合）で処理が終わる。
-- [ ] Given README の再現コマンド, when そのまま実行する, then 代表出力が得られる。
-- [ ] Given CI smoke test, when CLI を実行する, then 出力検証が PASS / FAIL / SKIP を区別して記録される。
-- [ ] Given 入力の最大メモリ設定, when 大きな fixture を実行する, then 設定上限を超える保持をしない（読取量の証跡）。
+- [x] Given 0004 の fixture, when CLI を実行する, then track 一覧と先頭 N サンプルが上流 example 相当の情報で表示され、0013 の結果と一致する。（`moon run src/examples/demux --target native -- tests/fixtures/upstream/black-h264-video.mp4` と `cargo run --release --example demux`（pinned SHA、RUSTUP_TOOLCHAIN=1.94.0）の出力を項目対応で突合：Track ID / Duration / timescale / Timestamp / Data offset(hex) / Data size が一致。MoonBit 側は issue 要求の追列 `Kind` / `Sample entry` / `Keyframe` / `Composition time offset` を追加）
+- [x] Given 先頭 10 件 / 全件 / `--max-samples 0`, when 実行する, then それぞれ表示数が期待どおりで exit code 0 になる。（`beep-aac-audio.mp4 --max-samples 3` → 3 件 + truncated 注記、`--max-samples 0` → track のみ + 注記、`--max-samples 100`（全件超過）→ 注記なし。wbtest で固定）
+- [x] Given `--json`, when 実行する, then 64bit offset が十進文字列で出力され、値が丸められない。（`duration`/`timestamp`/`data_offset`/`composition_time_offset` は引用符付き十進、`track_id`/`timescale`/`data_size` 等の 32bit は number のまま。厳密 schema を inspect snapshot で固定）
+- [x] Given 存在しないパス, when 実行する, then 非ゼロ exit で stderr に統一形式のエラーを出す（panic しない）。（`error: cannot open file: <path>` → exit 3）
+- [x] Given 非 MP4・空・途中切断のファイル, when 実行する, then 統一されたエラー表示と非ゼロ exit になる。（非 MP4(十分大) → `MP4 decode error (InvalidData)` exit 5、空/小/途中切断 → `unexpected end of file: position=…, expected=…, got=…` exit 3）
+- [x] Given 要求範囲が 1MB を超える fixture, when 実行する, then `handle_input` 契約違反にならず、明示エラー（または上限内の結合）で処理が終わる。（方針: 結合ではなく `RequestTooLarge` 明示エラー採用。`--buffer-size 100` で moov 要求 791B → `required input range exceeds the read limit` exit 4。契約違反入力を demuxer に渡さない）
+- [x] Given README の再現コマンド, when そのまま実行する, then 代表出力が得られる。（`moon run src/examples/demux --target native -- <file.mp4>` を README に記載、実実行で出力確認）
+- [x] Given CI smoke test, when CLI を実行する, then 出力検証が PASS / FAIL / SKIP を区別して記録される。（ci.yml に `demux-cli` job 追加: fixture 実行 3 件 + exit code 検証（不在→3、非MP4→5、上限超過→4）。ローカル環境では同コマンドを手動実行して PASS 確認済み）
+- [x] Given 入力の最大メモリ設定, when 大きな fixture を実行する, then 設定上限を超える保持をしない（読取量の証跡）。（`--buffer-size` で 1 回の要求あたりの読取上限を制御。既定 1MiB では fixture 群の最大要求（moov ~3.5KB）で問題なく動作し、mdat payload が要求されないことは 0013 の oracle 要求列で証明済み）
 
 ## テスト計画
 
@@ -98,5 +98,14 @@ Upstream baseline: [shiguredo/mp4-rs@1282b704f44184ec792e1549b5d31e0c4c54dc59](h
 - 関連: [0003](./0003-ci-contract.md)（CI smoke）、[0004](./0004-oracle-fixtures.md)（fixture / oracle）、[0013](./0013-mp4-file-demux.md)（demuxer）、[0015](./0015-web-mp4-dump.md)（Web Dump との JSON 共通化）、[0016](./0016-rust-moonbit-diff.md)（差分 Lab の基準出力）。
 - 関連ロードマップ: [0000](./0000-implementation-roadmap.md) の M1 とテスト分類（PASS / FAIL / UNVERIFIED / NOT_RUN）。
 - 証跡ルール: checkbox は実際に実行した証拠がある項目だけ完了にする。CLI 出力と exit code を smoke test の artifact に残す。
-- 実装時の未決事項: コマンド形（package 構成）、`--max-samples` の既定値、exit code の具体値、JSON schema の確定は実装時に決めて本 issue へ追記する。
+- 実装時に確定した事項（2026-10-18 記録）:
+  - コマンド形: `moon run src/examples/demux --target native -- <file.mp4> [--max-samples N] [--json] [--buffer-size BYTES]`。package は `src/examples/demux`（`pkgtype(executable)`、`supported_targets = "+native"`）。`--target native` は module の `preferred_target = "js"` のため明示が必要。
+  - `--max-samples` 既定値: 10（upstream demux.rs の先頭 10 件に一致）。
+  - exit code: 0 正常 / 2 引数不正 / 3 I/O（open・予期しない EOF）/ 4 要求レンジが `--buffer-size` 超過 / 5 demux エラー。
+  - 1MB ポリシー: 安全結合ではなく `CliError::RequestTooLarge` の明示エラーを採用（要求は 1 回の allocation で上限内に収める前提が簡潔で、契約違反入力を渡さないことを優先）。
+  - JSON schema: `{file, tracks:[{index,track_id,kind,duration,timescale}], samples:[{index,track_id,sample_entry,keyframe,timestamp,duration,composition_time_offset,data_offset,data_size}], shown_samples, truncated}`。u64/i64 は十進文字列、u32 は number。
+  - 打ち切り判定: `next_sample` を 1 件余分に probe して「残りあり」のときだけ `truncated=true` / `showing first N samples` 注記を出す（upstream は上限到達時に無条件で注記。差分は upstream.md に記録）。
+  - 終了コード制御: `extern "c" fn exit` FFI（argparse と同じ手段）。
+  - 追加依存: `moonbitlang/async@0.22.5`（実行パッケージ限定。core の Sans I/O は不変、依存方向 `bytes <- box <- boxes <- demux` への影響なし）。
 - 2026-10-16: 本文を実装可能な形式へ整備し、実装に着手可能なため polished へ更新。
+- 2026-10-18: 実装・検証完了のため done へ。証跡: `moon test --target native` 419/419 PASS（新規 16 件 + 既存 403）、`moon test`/`--target js` 各 403/403 PASS、`moon check` native/js とも 0 error / 0 warning、`moon fmt`/`moon info` 適用済み（実行 package のため .mbti 無し）。`cargo run --release --example demux`（pinned SHA）との項目突合を実施。CI に `demux-cli` smoke job を追加し、0011–0013 で生成した oracle case table の regen 検証が CI に無かった欠落も同時に修正した（3 ファイルとも regen + fmt で差分なしを確認）。
