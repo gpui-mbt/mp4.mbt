@@ -11,9 +11,10 @@ moon -C native/inspector run src/main --target native -- <file.mp4>
 moon -C native/inspector run src/main --target native -- <file.mp4> --smoke
 ```
 
-`--smoke` presents one frame, destroys the window and exits. It requires a
-working macOS GUI session; in a headless environment the host start fails and
-the smoke is recorded as NOT_RUN.
+`--smoke` presents one frame, destroys the window and exits. `--status <path>`
+writes `ok rows=N` or an error string after the smoke. It requires a working
+macOS GUI session; in a headless environment the host start aborts and the
+smoke is recorded as NOT_RUN.
 
 ## Limits
 

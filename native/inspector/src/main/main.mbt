@@ -149,11 +149,22 @@ async fn build_lines(path : String) -> Array[String] {
 }
 
 ///|
-async fn run(smoke : Bool, path : String) -> Unit {
+async fn write_status(path : String?, text : String) -> Unit {
+  match path {
+    Some(path) => @fs.write_file(path, text)
+    None => ()
+  }
+}
+
+///|
+async fn run(smoke : Bool, path : String, status_path : String?) -> Unit {
   let lines = build_lines(path)
   let host = match @macos.Host::start() {
     Ok(host) => host
-    Err(_) => abort("macOS host start failed")
+    Err(_) => {
+      write_status(status_path, "error: macOS host start failed")
+      return
+    }
   }
   let window = match host.create_window(
     "mp4.mbt Inspector — " + path,
@@ -161,12 +172,18 @@ async fn run(smoke : Bool, path : String) -> Unit {
     700.0,
   ) {
     Ok(window) => window
-    Err(_) => abort("window creation failed")
+    Err(_) => {
+      write_status(status_path, "error: window creation failed")
+      return
+    }
   }
   let snapshot = inspector_scene(1000.0, 700.0, lines)
   match host.present(window, snapshot) {
     Ok(_) => ()
-    Err(_) => abort("present failed")
+    Err(_) => {
+      write_status(status_path, "error: present failed")
+      return
+    }
   }
   if smoke {
     match host.destroy_window(window) {
@@ -177,6 +194,7 @@ async fn run(smoke : Bool, path : String) -> Unit {
       Ok(_) => ()
       Err(_) => ()
     }
+    write_status(status_path, "ok rows=\{lines.length()}")
     println("inspector smoke: rows=\{lines.length()}")
     return
   }
@@ -214,9 +232,13 @@ async fn main {
   let args = @env.args()
   let smoke = args.contains("--smoke")
   let mut path = ""
+  let mut status_path : String? = None
   let mut i = 1
   while i < args.length() {
-    if args[i] != "--smoke" {
+    if args[i] == "--status" && i + 1 < args.length() {
+      status_path = Some(args[i + 1])
+      i = i + 1
+    } else if args[i] != "--smoke" {
       path = args[i]
     }
     i = i + 1
@@ -225,7 +247,7 @@ async fn main {
     println("usage: inspector <file.mp4> [--smoke]")
     return
   }
-  run(smoke, path) catch {
+  run(smoke, path, status_path) catch {
     _ => ()
   }
 }

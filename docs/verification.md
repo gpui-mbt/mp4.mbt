@@ -37,7 +37,7 @@ Notes:
 
 | Check | Reason |
 | --- | --- |
-| Native inspector window smoke | Headless session: `@macos.Host::start()` fails without a GUI window server. |
+| Native inspector window smoke | Direct run, `launchctl asuser`, and a `.app` bundle via LaunchServices all abort at `@macos.Host::start()` (SIGABRT / `window_unavailable`); this shell has no usable GUI WindowServer session. |
 | Native inspector file picker / scroll / hex interaction | Not implemented yet; the host renders the portable rows. |
 | Large-file (500 MB+) no-full-read measurement | Not measured. |
 | CI-run browser E2E | Playwright browsers are not downloaded in CI; the E2E is a local/manual check. |
