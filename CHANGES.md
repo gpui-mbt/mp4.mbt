@@ -8,6 +8,17 @@ versions (`M0`–`M5`); unreleased work is listed under `Unreleased`.
 
 ### Added
 
+- Codec helpers (issues 0024–0026): H.264/H.265 Annex B and length-prefixed
+  NAL parsing/conversion plus `avc1`/`hev1`/`hvc1` construction; AAC
+  AudioSpecificConfig and ADTS parse/wrap plus `mp4a`; Opus sample entry;
+  AV1 OBU/LEB128/sequence header, VP8 and VP9 frame-header parsing and
+  `av01`/`vp08`/`vp09` construction.
+
+- Subtitle sample entries (issue 0028): typed `stpp`/`wvtt`/`tx3g`,
+  `vttC`/`ftab`/`BoxRecord`/`StyleRecord`/`FontRecord`, codec strings and
+  mux handler/media-header mapping. Hybrid MP4 position contract and caller
+  procedure are documented in `docs/hybrid_mp4.md` (issue 0027).
+
 - Fragmented MP4 support (issues 0017–0021): typed `mvex`/`mehd`/`trex`,
   `moof`/`mfhd`/`traf`/`tfhd`/`tfdt`/`trun`, `sidx`, `mfra`/`tfra`/`mfro`,
   `RootBox` fMP4 variants, `Fmp4SegmentDemuxer`, incremental

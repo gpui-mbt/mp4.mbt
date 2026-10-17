@@ -277,6 +277,32 @@ test "mp4 file muxer detects a missing advance_position" {
 }
 
 ///|
+test "mp4 file muxer starts a new chunk after advance_position" {
+  let muxer = @mux.Mp4FileMuxer::new()
+  let initial = muxer.initial_boxes_bytes()
+  muxer.append_sample(
+    test_file_sample(
+      @bytes.TrackKind::Video,
+      initial.length().to_uint64(),
+      true,
+      Some(test_file_entry()),
+    ),
+  )
+  muxer.advance_position(4UL)
+  muxer.append_sample(
+    test_file_sample(
+      @bytes.TrackKind::Video,
+      initial.length().to_uint64() + 4UL + 4UL,
+      true,
+      None,
+    ),
+  )
+  let finalized = muxer.finalize()
+  let stbl = finalized.moov_box().trak_boxes[0].mdia_box.minf_box.stbl_box
+  inspect(stbl.stsc_box.entries.length(), content="2")
+}
+
+///|
 test "mp4 file muxer uses faststart when reserved space is sufficient" {
   let options = @mux.Mp4FileMuxerOptions::new(
     @mux.estimate_maximum_moov_box_size([4]),

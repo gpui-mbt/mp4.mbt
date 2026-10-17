@@ -2,15 +2,220 @@
 package "gpui-mbt/mp4/bitstream"
 
 import {
+  "gpui-mbt/mp4/boxes",
   "gpui-mbt/mp4/bytes",
   "moonbitlang/core/buffer",
+  "moonbitlang/core/debug",
 }
 
 // Values
+pub fn annexb_to_length_prefixed(Bytes, LengthSize) -> Bytes raise @bytes.Mp4Error
+
+pub fn annexb_to_length_prefixed_h265(Bytes, LengthSize) -> Bytes raise @bytes.Mp4Error
+
+pub fn build_av01_box(Av1SampleEntryConfig, Bytes) -> @boxes.Av01Box raise @bytes.Mp4Error
+
+pub fn build_av01_box_from_config_obus(Bytes, UInt, UInt) -> @boxes.Av01Box raise @bytes.Mp4Error
+
+pub fn build_avc1_box(Array[Bytes], Array[Bytes], H264SampleEntryConfig) -> @boxes.Avc1Box raise @bytes.Mp4Error
+
+pub fn build_avc1_box_from_annexb(Bytes, H264SampleEntryConfig) -> @boxes.Avc1Box raise @bytes.Mp4Error
+
+pub fn build_hev1_box(Array[Bytes], Array[Bytes], Array[Bytes], H265SampleEntryConfig) -> @boxes.Hev1Box raise @bytes.Mp4Error
+
+pub fn build_hev1_box_from_annexb(Bytes, H265SampleEntryConfig) -> @boxes.Hev1Box raise @bytes.Mp4Error
+
+pub fn build_hvc1_box(Array[Bytes], Array[Bytes], Array[Bytes], H265SampleEntryConfig) -> @boxes.Hvc1Box raise @bytes.Mp4Error
+
+pub fn build_hvc1_box_from_annexb(Bytes, H265SampleEntryConfig) -> @boxes.Hvc1Box raise @bytes.Mp4Error
+
+pub fn build_mp4a_box(AudioSpecificConfig, Mp4aSampleEntryConfig) -> @boxes.Mp4aBox raise @bytes.Mp4Error
+
+pub fn build_opus_box(OpusSampleEntryConfig) -> @boxes.OpusBox
+
+pub fn build_vp08_box(Vp8SampleEntryConfig) -> @boxes.Vp08Box raise @bytes.Mp4Error
+
+pub fn build_vp09_box(Vp9FrameHeader, Vp9SampleEntryConfig) -> @boxes.Vp09Box raise @bytes.Mp4Error
+
+pub fn collect_nal_units(Array[H264NalUnit], H264NalUnitType) -> Array[Bytes]
+
+pub fn collect_nal_units_h265(Array[H265NalUnit], H265NalUnitType) -> Array[Bytes]
+
+pub fn decode_leb128(Bytes) -> (UInt, Int) raise @bytes.Mp4Error
+
+pub fn encode_audio_specific_config(AudioSpecificConfig) -> Bytes raise @bytes.Mp4Error
+
+pub fn length_prefixed_to_annexb(Bytes, LengthSize) -> Bytes raise @bytes.Mp4Error
+
+pub fn length_prefixed_to_annexb_h265(Bytes, LengthSize) -> Bytes raise @bytes.Mp4Error
+
+pub fn parse_adts_frame(Bytes) -> (AdtsHeader, Bytes) raise @bytes.Mp4Error
+
+pub fn parse_annexb_nal_units(Bytes) -> Array[H264NalUnit] raise @bytes.Mp4Error
+
+pub fn parse_annexb_nal_units_h265(Bytes) -> Array[H265NalUnit] raise @bytes.Mp4Error
+
+pub fn parse_audio_specific_config(Bytes) -> AudioSpecificConfig raise @bytes.Mp4Error
+
+pub fn parse_frame_header_prefix(Bytes) -> Av1FrameHeaderPrefix raise @bytes.Mp4Error
+
+pub fn parse_length_prefixed_nal_units(Bytes, LengthSize) -> Array[H264NalUnit] raise @bytes.Mp4Error
+
+pub fn parse_length_prefixed_nal_units_h265(Bytes, LengthSize) -> Array[H265NalUnit] raise @bytes.Mp4Error
+
+pub fn parse_obus(Bytes, Av1ObuParseContext) -> Array[Av1Obu] raise @bytes.Mp4Error
+
+pub fn parse_sequence_header(Bytes) -> Av1SequenceHeader raise @bytes.Mp4Error
+
+pub fn parse_sps(Bytes) -> H264Sps raise @bytes.Mp4Error
+
+pub fn parse_sps_h265(Bytes, UInt, UInt) -> H265Sps raise @bytes.Mp4Error
+
+pub fn parse_vp8_frame_header(Bytes) -> Vp8FrameHeader raise @bytes.Mp4Error
+
+pub fn parse_vp9_frame_header(Bytes) -> Vp9FrameHeader raise @bytes.Mp4Error
+
+pub fn remove_emulation_prevention(Bytes) -> Bytes
+
+pub fn wrap_raw_aac_in_adts(Bytes, AudioSpecificConfig, AdtsEncodeConfig) -> Bytes raise @bytes.Mp4Error
 
 // Errors
 
 // Types and methods
+pub struct AdtsEncodeConfig {
+  mpeg_version : AdtsMpegVersion
+  original_copy : Bool
+  home : Bool
+} derive(Eq, Hash, @debug.Debug)
+pub fn AdtsEncodeConfig::default() -> Self
+pub fn AdtsEncodeConfig::equal(Self, Self) -> Bool
+pub fn AdtsEncodeConfig::hash(Self) -> Int
+pub fn AdtsEncodeConfig::hash_combine(Self, Hasher) -> Unit
+pub fn AdtsEncodeConfig::not_equal(Self, Self) -> Bool
+pub fn AdtsEncodeConfig::to_repr(Self) -> @debug.Repr
+
+pub struct AdtsHeader {
+  mpeg_version : AdtsMpegVersion
+  protection_absent : Bool
+  sampling_frequency_index : UInt
+  channel_configuration : UInt
+  frame_length : UInt
+  original_copy : Bool
+  home : Bool
+} derive(Eq, Hash, @debug.Debug)
+pub fn AdtsHeader::equal(Self, Self) -> Bool
+pub fn AdtsHeader::hash(Self) -> Int
+pub fn AdtsHeader::hash_combine(Self, Hasher) -> Unit
+pub fn AdtsHeader::not_equal(Self, Self) -> Bool
+pub fn AdtsHeader::to_repr(Self) -> @debug.Repr
+
+pub(all) enum AdtsMpegVersion {
+  Mpeg4
+  Mpeg2
+} derive(Eq, Hash, @debug.Debug)
+pub fn AdtsMpegVersion::equal(Self, Self) -> Bool
+pub fn AdtsMpegVersion::hash(Self) -> Int
+pub fn AdtsMpegVersion::hash_combine(Self, Hasher) -> Unit
+pub fn AdtsMpegVersion::not_equal(Self, Self) -> Bool
+pub fn AdtsMpegVersion::to_repr(Self) -> @debug.Repr
+
+pub(all) enum AudioObjectType {
+  AacLc
+} derive(Eq, Hash, @debug.Debug)
+pub fn AudioObjectType::as_u8(Self) -> UInt
+pub fn AudioObjectType::equal(Self, Self) -> Bool
+pub fn AudioObjectType::hash(Self) -> Int
+pub fn AudioObjectType::hash_combine(Self, Hasher) -> Unit
+pub fn AudioObjectType::not_equal(Self, Self) -> Bool
+pub fn AudioObjectType::to_repr(Self) -> @debug.Repr
+
+pub struct AudioSpecificConfig {
+  audio_object_type : AudioObjectType
+  sampling_frequency : SamplingFrequency
+  channel_configuration : ChannelConfiguration
+} derive(Eq, Hash, @debug.Debug)
+pub fn AudioSpecificConfig::equal(Self, Self) -> Bool
+pub fn AudioSpecificConfig::hash(Self) -> Int
+pub fn AudioSpecificConfig::hash_combine(Self, Hasher) -> Unit
+pub fn AudioSpecificConfig::new(AudioObjectType, SamplingFrequency, ChannelConfiguration) -> Self
+pub fn AudioSpecificConfig::not_equal(Self, Self) -> Bool
+pub fn AudioSpecificConfig::to_repr(Self) -> @debug.Repr
+
+pub struct Av1FrameHeaderPrefix {
+  show_frame : Bool
+  frame_type : UInt
+} derive(Eq, Hash, @debug.Debug)
+pub fn Av1FrameHeaderPrefix::equal(Self, Self) -> Bool
+pub fn Av1FrameHeaderPrefix::hash(Self) -> Int
+pub fn Av1FrameHeaderPrefix::hash_combine(Self, Hasher) -> Unit
+pub fn Av1FrameHeaderPrefix::not_equal(Self, Self) -> Bool
+pub fn Av1FrameHeaderPrefix::to_repr(Self) -> @debug.Repr
+
+pub struct Av1Obu {
+  obu_type : Av1ObuType
+  has_extension : Bool
+  payload : Bytes
+} derive(Eq, Hash, @debug.Debug)
+pub fn Av1Obu::equal(Self, Self) -> Bool
+pub fn Av1Obu::hash(Self) -> Int
+pub fn Av1Obu::hash_combine(Self, Hasher) -> Unit
+pub fn Av1Obu::not_equal(Self, Self) -> Bool
+pub fn Av1Obu::to_repr(Self) -> @debug.Repr
+
+pub(all) enum Av1ObuParseContext {
+  Stream
+  Config
+} derive(Eq, Hash, @debug.Debug)
+pub fn Av1ObuParseContext::equal(Self, Self) -> Bool
+pub fn Av1ObuParseContext::hash(Self) -> Int
+pub fn Av1ObuParseContext::hash_combine(Self, Hasher) -> Unit
+pub fn Av1ObuParseContext::not_equal(Self, Self) -> Bool
+pub fn Av1ObuParseContext::to_repr(Self) -> @debug.Repr
+
+pub(all) enum Av1ObuType {
+  SequenceHeader
+  TemporalDelimiter
+  FrameHeader
+  Frame
+  Other(UInt)
+} derive(Eq, Hash, @debug.Debug)
+pub fn Av1ObuType::equal(Self, Self) -> Bool
+pub fn Av1ObuType::from_value(UInt) -> Self
+pub fn Av1ObuType::hash(Self) -> Int
+pub fn Av1ObuType::hash_combine(Self, Hasher) -> Unit
+pub fn Av1ObuType::not_equal(Self, Self) -> Bool
+pub fn Av1ObuType::to_repr(Self) -> @debug.Repr
+
+pub struct Av1SampleEntryConfig {
+  width : UInt
+  height : UInt
+  seq_profile : UInt
+  seq_level_idx : UInt
+  seq_tier : UInt
+  high_bitdepth : Bool
+  twelve_bit : Bool
+  monochrome : Bool
+  subsampling_x : Bool
+  subsampling_y : Bool
+} derive(Eq, Hash, @debug.Debug)
+pub fn Av1SampleEntryConfig::equal(Self, Self) -> Bool
+pub fn Av1SampleEntryConfig::hash(Self) -> Int
+pub fn Av1SampleEntryConfig::hash_combine(Self, Hasher) -> Unit
+pub fn Av1SampleEntryConfig::new(UInt, UInt, UInt, UInt, seq_tier? : UInt, high_bitdepth? : Bool, twelve_bit? : Bool, monochrome? : Bool, subsampling_x? : Bool, subsampling_y? : Bool) -> Self
+pub fn Av1SampleEntryConfig::not_equal(Self, Self) -> Bool
+pub fn Av1SampleEntryConfig::to_repr(Self) -> @debug.Repr
+
+pub struct Av1SequenceHeader {
+  seq_profile : UInt
+  seq_level_idx : UInt
+  seq_tier : UInt
+} derive(Eq, Hash, @debug.Debug)
+pub fn Av1SequenceHeader::equal(Self, Self) -> Bool
+pub fn Av1SequenceHeader::hash(Self) -> Int
+pub fn Av1SequenceHeader::hash_combine(Self, Hasher) -> Unit
+pub fn Av1SequenceHeader::not_equal(Self, Self) -> Bool
+pub fn Av1SequenceHeader::to_repr(Self) -> @debug.Repr
+
 pub struct BitReader {
   data : Bytes
   mut byte_position : Int
@@ -41,6 +246,286 @@ pub fn BitWriter::to_bytes(Self) -> Bytes
 pub fn BitWriter::write_bit(Self, UInt) -> Unit
 pub fn BitWriter::write_bits(Self, UInt, Int) -> Unit raise @bytes.Mp4Error
 pub fn BitWriter::write_bits64(Self, UInt64, Int) -> Unit raise @bytes.Mp4Error
+
+pub struct ChannelConfiguration {
+  value : UInt
+} derive(Eq, Hash, @debug.Debug)
+pub fn ChannelConfiguration::as_u8(Self) -> UInt
+pub fn ChannelConfiguration::channel_count(Self) -> UInt
+pub fn ChannelConfiguration::equal(Self, Self) -> Bool
+pub fn ChannelConfiguration::hash(Self) -> Int
+pub fn ChannelConfiguration::hash_combine(Self, Hasher) -> Unit
+pub fn ChannelConfiguration::new(UInt) -> Self raise @bytes.Mp4Error
+pub fn ChannelConfiguration::not_equal(Self, Self) -> Bool
+pub fn ChannelConfiguration::to_repr(Self) -> @debug.Repr
+
+pub struct ChannelCount {
+  value : UInt
+} derive(Eq, Hash, @debug.Debug)
+pub fn ChannelCount::equal(Self, Self) -> Bool
+pub fn ChannelCount::get(Self) -> UInt
+pub fn ChannelCount::hash(Self) -> Int
+pub fn ChannelCount::hash_combine(Self, Hasher) -> Unit
+pub fn ChannelCount::new(UInt) -> Self raise @bytes.Mp4Error
+pub fn ChannelCount::not_equal(Self, Self) -> Bool
+pub fn ChannelCount::to_repr(Self) -> @debug.Repr
+
+pub struct H264NalUnit {
+  nal_unit_type : H264NalUnitType
+  data : Bytes
+} derive(Eq, Hash, @debug.Debug)
+pub fn H264NalUnit::equal(Self, Self) -> Bool
+pub fn H264NalUnit::hash(Self) -> Int
+pub fn H264NalUnit::hash_combine(Self, Hasher) -> Unit
+pub fn H264NalUnit::not_equal(Self, Self) -> Bool
+pub fn H264NalUnit::to_repr(Self) -> @debug.Repr
+
+pub(all) enum H264NalUnitType {
+  NonIdrSlice
+  IdrSlice
+  Sei
+  Sps
+  Pps
+  Aud
+  Other(UInt)
+} derive(Eq, Hash, @debug.Debug)
+pub fn H264NalUnitType::equal(Self, Self) -> Bool
+pub fn H264NalUnitType::from_value(UInt) -> Self
+pub fn H264NalUnitType::hash(Self) -> Int
+pub fn H264NalUnitType::hash_combine(Self, Hasher) -> Unit
+pub fn H264NalUnitType::not_equal(Self, Self) -> Bool
+pub fn H264NalUnitType::to_repr(Self) -> @debug.Repr
+
+pub struct H264ProfileLevelId {
+  profile_idc : UInt
+  profile_iop : UInt
+  level_idc : UInt
+} derive(Eq, Hash, @debug.Debug)
+pub fn H264ProfileLevelId::equal(Self, Self) -> Bool
+pub fn H264ProfileLevelId::from_hex(String) -> Self raise @bytes.Mp4Error
+pub fn H264ProfileLevelId::hash(Self) -> Int
+pub fn H264ProfileLevelId::hash_combine(Self, Hasher) -> Unit
+pub fn H264ProfileLevelId::not_equal(Self, Self) -> Bool
+pub fn H264ProfileLevelId::to_hex(Self) -> String
+pub fn H264ProfileLevelId::to_repr(Self) -> @debug.Repr
+
+pub struct H264SampleEntryConfig {
+  length_size : LengthSize
+} derive(Eq, Hash, @debug.Debug)
+pub fn H264SampleEntryConfig::equal(Self, Self) -> Bool
+pub fn H264SampleEntryConfig::hash(Self) -> Int
+pub fn H264SampleEntryConfig::hash_combine(Self, Hasher) -> Unit
+pub fn H264SampleEntryConfig::new(LengthSize) -> Self
+pub fn H264SampleEntryConfig::not_equal(Self, Self) -> Bool
+pub fn H264SampleEntryConfig::to_repr(Self) -> @debug.Repr
+
+pub struct H264Sps {
+  profile_level_id : H264ProfileLevelId
+  chroma_format_idc : UInt
+  bit_depth_luma_minus8 : UInt
+  bit_depth_chroma_minus8 : UInt
+  width : UInt
+  height : UInt
+} derive(Eq, Hash, @debug.Debug)
+pub fn H264Sps::equal(Self, Self) -> Bool
+pub fn H264Sps::hash(Self) -> Int
+pub fn H264Sps::hash_combine(Self, Hasher) -> Unit
+pub fn H264Sps::not_equal(Self, Self) -> Bool
+pub fn H264Sps::to_repr(Self) -> @debug.Repr
+
+pub(all) enum H265ConstantFrameRate {
+  Unknown
+  Constant
+  PerTemporalLayer
+} derive(Eq, Hash, @debug.Debug)
+pub fn H265ConstantFrameRate::equal(Self, Self) -> Bool
+pub fn H265ConstantFrameRate::hash(Self) -> Int
+pub fn H265ConstantFrameRate::hash_combine(Self, Hasher) -> Unit
+pub fn H265ConstantFrameRate::not_equal(Self, Self) -> Bool
+pub fn H265ConstantFrameRate::to_repr(Self) -> @debug.Repr
+
+pub struct H265NalUnit {
+  nal_unit_type : H265NalUnitType
+  data : Bytes
+} derive(Eq, Hash, @debug.Debug)
+pub fn H265NalUnit::equal(Self, Self) -> Bool
+pub fn H265NalUnit::hash(Self) -> Int
+pub fn H265NalUnit::hash_combine(Self, Hasher) -> Unit
+pub fn H265NalUnit::not_equal(Self, Self) -> Bool
+pub fn H265NalUnit::to_repr(Self) -> @debug.Repr
+
+pub(all) enum H265NalUnitType {
+  Vps
+  Sps
+  Pps
+  IdrWRadl
+  IdrNLp
+  Other(UInt)
+} derive(Eq, Hash, @debug.Debug)
+pub fn H265NalUnitType::equal(Self, Self) -> Bool
+pub fn H265NalUnitType::from_value(UInt) -> Self
+pub fn H265NalUnitType::hash(Self) -> Int
+pub fn H265NalUnitType::hash_combine(Self, Hasher) -> Unit
+pub fn H265NalUnitType::not_equal(Self, Self) -> Bool
+pub fn H265NalUnitType::to_repr(Self) -> @debug.Repr
+
+pub struct H265SampleEntryConfig {
+  length_size : LengthSize
+  avg_frame_rate : UInt
+  constant_frame_rate : H265ConstantFrameRate
+  width : UInt
+  height : UInt
+} derive(Eq, Hash, @debug.Debug)
+pub fn H265SampleEntryConfig::equal(Self, Self) -> Bool
+pub fn H265SampleEntryConfig::hash(Self) -> Int
+pub fn H265SampleEntryConfig::hash_combine(Self, Hasher) -> Unit
+pub fn H265SampleEntryConfig::new(LengthSize, UInt, UInt, avg_frame_rate? : UInt, constant_frame_rate? : H265ConstantFrameRate) -> Self
+pub fn H265SampleEntryConfig::not_equal(Self, Self) -> Bool
+pub fn H265SampleEntryConfig::to_repr(Self) -> @debug.Repr
+
+pub struct H265Sps {
+  general_profile_space : UInt
+  general_tier_flag : UInt
+  general_profile_idc : UInt
+  general_profile_compatibility_flags : UInt
+  general_constraint_indicator_flags : UInt64
+  general_level_idc : UInt
+  sps_max_sub_layers_minus1 : UInt
+  sps_temporal_id_nesting_flag : UInt
+  width : UInt
+  height : UInt
+} derive(Eq, Hash, @debug.Debug)
+pub fn H265Sps::equal(Self, Self) -> Bool
+pub fn H265Sps::hash(Self) -> Int
+pub fn H265Sps::hash_combine(Self, Hasher) -> Unit
+pub fn H265Sps::not_equal(Self, Self) -> Bool
+pub fn H265Sps::to_repr(Self) -> @debug.Repr
+
+pub(all) enum LengthSize {
+  One
+  Two
+  Three
+  Four
+} derive(Eq, Hash, @debug.Debug)
+pub fn LengthSize::bytes(Self) -> Int
+pub fn LengthSize::equal(Self, Self) -> Bool
+pub fn LengthSize::from_length_size_minus_one(UInt) -> Self raise @bytes.Mp4Error
+pub fn LengthSize::hash(Self) -> Int
+pub fn LengthSize::hash_combine(Self, Hasher) -> Unit
+pub fn LengthSize::length_size_minus_one(Self) -> UInt
+pub fn LengthSize::not_equal(Self, Self) -> Bool
+pub fn LengthSize::to_repr(Self) -> @debug.Repr
+
+pub struct Mp4aSampleEntryConfig {
+  es_id : UInt
+  buffer_size_db : UInt
+  max_bitrate : UInt
+  avg_bitrate : UInt
+} derive(Eq, Hash, @debug.Debug)
+pub fn Mp4aSampleEntryConfig::equal(Self, Self) -> Bool
+pub fn Mp4aSampleEntryConfig::hash(Self) -> Int
+pub fn Mp4aSampleEntryConfig::hash_combine(Self, Hasher) -> Unit
+pub fn Mp4aSampleEntryConfig::new(UInt, UInt, UInt, UInt) -> Self raise @bytes.Mp4Error
+pub fn Mp4aSampleEntryConfig::not_equal(Self, Self) -> Bool
+pub fn Mp4aSampleEntryConfig::to_repr(Self) -> @debug.Repr
+
+pub struct OpusSampleEntryConfig {
+  channel_count : ChannelCount
+  pre_skip : UInt
+  input_sample_rate : UInt
+  output_gain : Int16
+} derive(Eq, Hash, @debug.Debug)
+pub fn OpusSampleEntryConfig::equal(Self, Self) -> Bool
+pub fn OpusSampleEntryConfig::hash(Self) -> Int
+pub fn OpusSampleEntryConfig::hash_combine(Self, Hasher) -> Unit
+pub fn OpusSampleEntryConfig::new(ChannelCount, UInt, UInt, output_gain? : Int16) -> Self
+pub fn OpusSampleEntryConfig::not_equal(Self, Self) -> Bool
+pub fn OpusSampleEntryConfig::to_repr(Self) -> @debug.Repr
+
+pub struct SamplingFrequency {
+  index : UInt
+  hz : UInt
+} derive(Eq, Hash, @debug.Debug)
+pub fn SamplingFrequency::equal(Self, Self) -> Bool
+pub fn SamplingFrequency::from_hz(UInt) -> Self raise @bytes.Mp4Error
+pub fn SamplingFrequency::from_index(UInt) -> Self raise @bytes.Mp4Error
+pub fn SamplingFrequency::hash(Self) -> Int
+pub fn SamplingFrequency::hash_combine(Self, Hasher) -> Unit
+pub fn SamplingFrequency::hz(Self) -> UInt
+pub fn SamplingFrequency::not_equal(Self, Self) -> Bool
+pub fn SamplingFrequency::sampling_frequency_index(Self) -> UInt
+pub fn SamplingFrequency::to_repr(Self) -> @debug.Repr
+
+pub struct Vp8FrameHeader {
+  keyframe : Bool
+  first_partition_size : UInt
+} derive(Eq, Hash, @debug.Debug)
+pub fn Vp8FrameHeader::equal(Self, Self) -> Bool
+pub fn Vp8FrameHeader::hash(Self) -> Int
+pub fn Vp8FrameHeader::hash_combine(Self, Hasher) -> Unit
+pub fn Vp8FrameHeader::not_equal(Self, Self) -> Bool
+pub fn Vp8FrameHeader::to_repr(Self) -> @debug.Repr
+
+pub(all) enum Vp8FrameType {
+  Key
+  Inter
+} derive(Eq, Hash, @debug.Debug)
+pub fn Vp8FrameType::equal(Self, Self) -> Bool
+pub fn Vp8FrameType::hash(Self) -> Int
+pub fn Vp8FrameType::hash_combine(Self, Hasher) -> Unit
+pub fn Vp8FrameType::not_equal(Self, Self) -> Bool
+pub fn Vp8FrameType::to_repr(Self) -> @debug.Repr
+
+pub struct Vp8SampleEntryConfig {
+  width : UInt
+  height : UInt
+  profile : UInt
+  level : UInt
+  bit_depth : UInt
+} derive(Eq, Hash, @debug.Debug)
+pub fn Vp8SampleEntryConfig::equal(Self, Self) -> Bool
+pub fn Vp8SampleEntryConfig::hash(Self) -> Int
+pub fn Vp8SampleEntryConfig::hash_combine(Self, Hasher) -> Unit
+pub fn Vp8SampleEntryConfig::new(UInt, UInt, profile? : UInt, level? : UInt, bit_depth? : UInt) -> Self
+pub fn Vp8SampleEntryConfig::not_equal(Self, Self) -> Bool
+pub fn Vp8SampleEntryConfig::to_repr(Self) -> @debug.Repr
+
+pub struct Vp9FrameHeader {
+  keyframe : Bool
+  profile : UInt
+  bit_depth : UInt
+  width : UInt
+  height : UInt
+} derive(Eq, Hash, @debug.Debug)
+pub fn Vp9FrameHeader::equal(Self, Self) -> Bool
+pub fn Vp9FrameHeader::hash(Self) -> Int
+pub fn Vp9FrameHeader::hash_combine(Self, Hasher) -> Unit
+pub fn Vp9FrameHeader::not_equal(Self, Self) -> Bool
+pub fn Vp9FrameHeader::to_repr(Self) -> @debug.Repr
+
+pub(all) enum Vp9FrameType {
+  Key
+  Inter
+} derive(Eq, Hash, @debug.Debug)
+pub fn Vp9FrameType::equal(Self, Self) -> Bool
+pub fn Vp9FrameType::hash(Self) -> Int
+pub fn Vp9FrameType::hash_combine(Self, Hasher) -> Unit
+pub fn Vp9FrameType::not_equal(Self, Self) -> Bool
+pub fn Vp9FrameType::to_repr(Self) -> @debug.Repr
+
+pub struct Vp9SampleEntryConfig {
+  width : UInt
+  height : UInt
+  profile : UInt
+  level : UInt
+  bit_depth : UInt
+} derive(Eq, Hash, @debug.Debug)
+pub fn Vp9SampleEntryConfig::equal(Self, Self) -> Bool
+pub fn Vp9SampleEntryConfig::hash(Self) -> Int
+pub fn Vp9SampleEntryConfig::hash_combine(Self, Hasher) -> Unit
+pub fn Vp9SampleEntryConfig::new(UInt, UInt, profile? : UInt, level? : UInt, bit_depth? : UInt) -> Self
+pub fn Vp9SampleEntryConfig::not_equal(Self, Self) -> Bool
+pub fn Vp9SampleEntryConfig::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

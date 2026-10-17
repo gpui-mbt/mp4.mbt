@@ -481,6 +481,36 @@ fn read_variable_uint(
 }
 
 ///|
+/// `stpp` のボックス種別。
+fn stpp_type() -> @bytes.BoxType {
+  normal_box_type(b"stpp")
+}
+
+///|
+/// `wvtt` のボックス種別。
+fn wvtt_type() -> @bytes.BoxType {
+  normal_box_type(b"wvtt")
+}
+
+///|
+/// `vttC` のボックス種別。
+fn vttc_type() -> @bytes.BoxType {
+  normal_box_type(b"vttC")
+}
+
+///|
+/// `tx3g` のボックス種別。
+fn tx3g_type() -> @bytes.BoxType {
+  normal_box_type(b"tx3g")
+}
+
+///|
+/// `ftab` のボックス種別。
+fn ftab_type() -> @bytes.BoxType {
+  normal_box_type(b"ftab")
+}
+
+///|
 /// `@box.BoxHeader::decode_header_and_payload` が返した payload view を、
 /// 追加のコピーなしで読むカーソルへ変換する。
 fn payload_cursor_of(

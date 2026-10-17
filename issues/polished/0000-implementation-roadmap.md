@@ -198,11 +198,11 @@ M1 では**動画そのものの再生や変換**を UI に表示できなくて
 
 #### M4 – Bitstream helpers / subtitles / Hybrid
 
-- [ ] [0024 H.264/H.265 NALとsample entry補助を移植する](./0024-bitstream-h264-h265.md) — P1 / deps: 0005, 0010
-- [ ] [0025 AAC ADTS/ASC・Opusパケット補助を移植する](./0025-bitstream-aac-opus.md) — P1 / deps: 0005, 0010
-- [ ] [0026 AV1/VP8/VP9 bitstream metadataを移植する](./0026-bitstream-av1-vp8-vp9.md) — P2 / deps: 0005, 0010
-- [ ] [0027 faststartとHybrid MP4の書込位置契約を固める](./0027-hybrid-faststart.md) — P2 / deps: 0020, 0022
-- [ ] [0028 stpp/wvtt/tx3g字幕trackを移植する](./0028-subtitle-sample-entry.md) — P1 / deps: 0008, 0010, 0018, 0022
+- [x] [0024 H.264/H.265 NALとsample entry補助を移植する](../done/0024-bitstream-h264-h265.md) — P1 / deps: 0005, 0010 / 検証: unit PASS, Rust oracle UNVERIFIED
+- [x] [0025 AAC ADTS/ASC・Opusパケット補助を移植する](../done/0025-bitstream-aac-opus.md) — P1 / deps: 0005, 0010 / 検証: unit PASS, Rust oracle UNVERIFIED
+- [x] [0026 AV1/VP8/VP9 bitstream metadataを移植する](../done/0026-bitstream-av1-vp8-vp9.md) — P2 / deps: 0005, 0010 / 検証: unit PASS, Rust oracle UNVERIFIED
+- [x] [0027 faststartとHybrid MP4の書込位置契約を固める](../done/0027-hybrid-faststart.md) — P2 / deps: 0020, 0022 / 検証: unit PASS, docs
+- [x] [0028 stpp/wvtt/tx3g字幕trackを移植する](../done/0028-subtitle-sample-entry.md) — P1 / deps: 0008, 0010, 0018, 0022 / 検証: unit PASS, Rust oracle UNVERIFIED
 
 #### M5 – Extended demos / quality / release
 

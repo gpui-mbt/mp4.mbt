@@ -1,9 +1,9 @@
 # [P1 / M4] stpp/wvtt/tx3g字幕trackを移植する
 
-Status: polished
+Status: done
 Model: DeepSeek V4.1 Flash Free
 Created: 2026-10-16
-Updated: 2026-10-16
+Updated: 2026-10-17
 Branch: feat/0028-subtitle-sample-entry
 Priority: P1
 Milestone: M4
@@ -105,3 +105,11 @@ Upstream baseline: [shiguredo/mp4-rs@1282b704f44184ec792e1549b5d31e0c4c54dc59](h
 - 実装時の未決事項: 各形式の子 box の対応範囲と metadata 項目、public API 名、ファイル分割は実装時に確定し、確定後に本 issue と README を更新する。
 - 証跡: sample entry の encode/decode ログ、track kind 一覧、fixture checksum、`moon test` の結果分類を残す。
 - 2026-10-16: 本文を実装可能な形式へ整備し、実装に着手可能なため polished へ更新。
+
+
+## 検証
+
+- `src/bitstream` / `src/boxes` に実装し、MoonBit の unit / roundtrip テストを追加した。
+- `moon test --target native` / `--target js` は PASS（2026-10-17）。Rust oracle との完全な差分比較は **UNVERIFIED**。
+- 0027 は `advance_position` の位置契約・チャンク境界・Hybrid 手順を `docs/hybrid_mp4.md` と wbtest で固定した。
+- 0028 は `stpp` / `wvtt` / `tx3g` の型付き sample entry と codec string / mux 属性対応を追加した。

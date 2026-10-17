@@ -6,8 +6,7 @@
 /// decode/encode する。それ以外の box_type は [`SampleEntry::Unknown`]
 /// として生バイト列を保持する（上流の `Unknown` フォールバックと同じ）。
 ///
-/// 字幕系エントリー（`stpp` / `wvtt` / `tx3g`）は Issue 0028 で扱うため、
-/// ここでは `Unknown` に分類される。
+/// 字幕系エントリー（`stpp` / `wvtt` / `tx3g`）も型付き variant として扱う。
 pub(all) enum SampleEntry {
   /// H.264 (AVC) 用サンプルエントリー（`avc1`）
   Avc1(Avc1Box)
@@ -27,6 +26,12 @@ pub(all) enum SampleEntry {
   Mp4a(Mp4aBox)
   /// FLAC 音声用サンプルエントリー（`fLaC`）
   Flac(FlacBox)
+  /// XML 字幕（TTML/IMSC）用サンプルエントリー（`stpp`）
+  Stpp(StppBox)
+  /// WebVTT 字幕用サンプルエントリー（`wvtt`）
+  Wvtt(WvttBox)
+  /// 3GPP Timed Text 字幕用サンプルエントリー（`tx3g`）
+  Tx3g(Tx3gBox)
   /// 上記のいずれにも該当しない box_type だった場合の受け皿
   ///
   /// demux 時に未知の box_type が出現した場合の保持先、および
@@ -141,6 +146,12 @@ pub impl @bytes.Decode for SampleEntry with fn decode(
     Mp4a(@bytes.decode_from(cursor))
   } else if box_type == flac_type() {
     Flac(@bytes.decode_from(cursor))
+  } else if box_type == stpp_type() {
+    Stpp(@bytes.decode_from(cursor))
+  } else if box_type == wvtt_type() {
+    Wvtt(@bytes.decode_from(cursor))
+  } else if box_type == tx3g_type() {
+    Tx3g(@bytes.decode_from(cursor))
   } else {
     Unknown(@bytes.decode_from(cursor))
   }
@@ -165,6 +176,9 @@ pub impl @bytes.Encode for SampleEntry with fn encode(
     Opus(b) => @bytes.Encode::encode(b, cursor)
     Mp4a(b) => @bytes.Encode::encode(b, cursor)
     Flac(b) => @bytes.Encode::encode(b, cursor)
+    Stpp(b) => @bytes.Encode::encode(b, cursor)
+    Wvtt(b) => @bytes.Encode::encode(b, cursor)
+    Tx3g(b) => @bytes.Encode::encode(b, cursor)
     Unknown(b) => @bytes.Encode::encode(b, cursor)
   }
 }
@@ -184,6 +198,9 @@ pub impl @box.BaseBox for SampleEntry with fn box_type(self) {
     Opus(b) => b.box_type()
     Mp4a(b) => b.box_type()
     Flac(b) => b.box_type()
+    Stpp(b) => b.box_type()
+    Wvtt(b) => b.box_type()
+    Tx3g(b) => b.box_type()
     Unknown(b) => b.box_type()
   }
 }
@@ -210,6 +227,9 @@ pub impl @box.BaseBox for SampleEntry with fn children(self) {
     Opus(b) => b.children()
     Mp4a(b) => b.children()
     Flac(b) => b.children()
+    Stpp(b) => b.children()
+    Wvtt(b) => b.children()
+    Tx3g(b) => b.children()
     Unknown(b) => @box.BaseBox::children(b)
   }
 }

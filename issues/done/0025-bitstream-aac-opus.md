@@ -1,9 +1,9 @@
 # [P1 / M4] AAC ADTS/ASC・Opusパケット補助を移植する
 
-Status: polished
+Status: done
 Model: DeepSeek V4.1 Flash Free
 Created: 2026-10-16
-Updated: 2026-10-16
+Updated: 2026-10-17
 Branch: feat/0025-bitstream-aac-opus
 Priority: P1
 Milestone: M4
@@ -104,3 +104,11 @@ AAC-LC AOT2 の AudioSpecificConfig（ASC）と ADTS header を parse/encode し
 - 実装時の未決事項: ファイル名と package 分割は 0002 で確定する。公開 API 名とエラー型の対応は実装時に決め、確定後に本 issue と README を更新する。
 - 証跡: oracle 比較ログ、fixture checksum、`moon test` の結果分類を issue または PR に添付する。
 - 2026-10-16: 本文を実装可能な形式へ整備し、実装に着手可能なため polished へ更新。
+
+
+## 検証
+
+- `src/bitstream` / `src/boxes` に実装し、MoonBit の unit / roundtrip テストを追加した。
+- `moon test --target native` / `--target js` は PASS（2026-10-17）。Rust oracle との完全な差分比較は **UNVERIFIED**。
+- 0027 は `advance_position` の位置契約・チャンク境界・Hybrid 手順を `docs/hybrid_mp4.md` と wbtest で固定した。
+- 0028 は `stpp` / `wvtt` / `tx3g` の型付き sample entry と codec string / mux 属性対応を追加した。

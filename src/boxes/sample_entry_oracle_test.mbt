@@ -420,6 +420,9 @@ fn sample_entry_snapshot(entry : @boxes.SampleEntry) -> Array[String] {
     Opus(_) => "Opus"
     Mp4a(_) => "mp4a"
     Flac(_) => "fLaC"
+    Stpp(_) => "stpp"
+    Wvtt(_) => "wvtt"
+    Tx3g(_) => "tx3g"
     Unknown(_) => "unknown"
   }
   lines.push("variant=\{variant}")
@@ -498,6 +501,9 @@ fn sample_entry_snapshot(entry : @boxes.SampleEntry) -> Array[String] {
       sample_entry_dfla_lines(lines, "dfLa", b.dfla_box)
       sample_entry_unknown_box_lines(lines, b.unknown_boxes)
     }
+    Stpp(_) => ()
+    Wvtt(_) => ()
+    Tx3g(_) => ()
     Unknown(b) => {
       let size_kind = match b.box_size {
         U32(_) => "u32"

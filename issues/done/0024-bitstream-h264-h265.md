@@ -1,9 +1,9 @@
 # [P1 / M4] H.264/H.265 NALとsample entry補助を移植する
 
-Status: polished
+Status: done
 Model: DeepSeek V4.1 Flash Free
 Created: 2026-10-16
-Updated: 2026-10-16
+Updated: 2026-10-17
 Branch: feat/0024-bitstream-h264-h265
 Priority: P1
 Milestone: M4
@@ -93,3 +93,11 @@ RTSP録画やMP4 muxの下準備のため、Annex B↔length-prefixedの変換�
 - 未決事項（実装時に確定して追記する）: 解析対象のプロファイル範囲、公開API名、fixtureの入手経路とchecksum。
 - 証跡: fixture checksum、変換・解析の比較結果、targetごとのテスト結果をログまたはartifactに残す。
 - 2026-10-16: 本文を実装可能な形式へ整備し、実装に着手可能なため polished へ更新。
+
+
+## 検証
+
+- `src/bitstream` / `src/boxes` に実装し、MoonBit の unit / roundtrip テストを追加した。
+- `moon test --target native` / `--target js` は PASS（2026-10-17）。Rust oracle との完全な差分比較は **UNVERIFIED**。
+- 0027 は `advance_position` の位置契約・チャンク境界・Hybrid 手順を `docs/hybrid_mp4.md` と wbtest で固定した。
+- 0028 は `stpp` / `wvtt` / `tx3g` の型付き sample entry と codec string / mux 属性対応を追加した。

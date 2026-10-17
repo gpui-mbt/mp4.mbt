@@ -79,6 +79,9 @@ pub fn from_sample_entry(
     Mp4a(b) => mp4a_codec_string(b.esds_box.es.dec_config_descr)
     Opus(_) => "Opus"
     Flac(_) => "fLaC"
+    Stpp(_) => "stpp"
+    Wvtt(_) => "wvtt"
+    Tx3g(_) => "tx3g"
     Unknown(b) =>
       raise @bytes.Mp4Error::unsupported(
         "codec string is unsupported for unknown sample entry type `\{b.box_type.to_string()}`",

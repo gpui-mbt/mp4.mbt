@@ -193,6 +193,19 @@ pub fn BoxNode::start(Self) -> UInt64
 pub fn BoxNode::to_repr(Self) -> @debug.Repr
 pub fn BoxNode::total_size(Self) -> UInt64
 
+pub struct BoxRecord {
+  top : Int16
+  left : Int16
+  bottom : Int16
+  right : Int16
+} derive(Eq, Hash, @debug.Debug)
+pub fn BoxRecord::equal(Self, Self) -> Bool
+pub fn BoxRecord::hash(Self) -> Int
+pub fn BoxRecord::hash_combine(Self, Hasher) -> Unit
+pub fn BoxRecord::new(Int16, Int16, Int16, Int16) -> Self
+pub fn BoxRecord::not_equal(Self, Self) -> Bool
+pub fn BoxRecord::to_repr(Self) -> @debug.Repr
+
 pub struct BoxTreeOptions {
   max_depth : Int
   max_nodes : Int
@@ -553,6 +566,17 @@ pub fn FlacMetadataBlock::to_repr(Self) -> @debug.Repr
 pub impl @bytes.Decode for FlacMetadataBlock
 pub impl @bytes.Encode for FlacMetadataBlock
 
+pub struct FontRecord {
+  font_id : UInt
+  font_name : Bytes
+} derive(Eq, Hash, @debug.Debug)
+pub fn FontRecord::equal(Self, Self) -> Bool
+pub fn FontRecord::hash(Self) -> Int
+pub fn FontRecord::hash_combine(Self, Hasher) -> Unit
+pub fn FontRecord::new(UInt, Bytes) -> Self
+pub fn FontRecord::not_equal(Self, Self) -> Bool
+pub fn FontRecord::to_repr(Self) -> @debug.Repr
+
 pub struct FreeBox {
   payload : Bytes
 } derive(Eq, @debug.Debug)
@@ -568,6 +592,24 @@ pub fn FreeBox::to_repr(Self) -> @debug.Repr
 pub impl @box.BaseBox for FreeBox
 pub impl @bytes.Decode for FreeBox
 pub impl @bytes.Encode for FreeBox
+
+pub struct FtabBox {
+  entries : Array[FontRecord]
+} derive(Eq, Hash, @debug.Debug)
+pub fn FtabBox::box_type(Self) -> @bytes.BoxType
+pub fn FtabBox::children(Self) -> Array[&@box.BaseBox]
+pub fn FtabBox::decode(@bytes.ReadCursor) -> Self raise @bytes.Mp4Error
+pub fn FtabBox::encode(Self, @bytes.WriteCursor) -> Unit raise @bytes.Mp4Error
+pub fn FtabBox::equal(Self, Self) -> Bool
+pub fn FtabBox::hash(Self) -> Int
+pub fn FtabBox::hash_combine(Self, Hasher) -> Unit
+pub fn FtabBox::is_unknown_box(Self) -> Bool
+pub fn FtabBox::new(Array[FontRecord]) -> Self
+pub fn FtabBox::not_equal(Self, Self) -> Bool
+pub fn FtabBox::to_repr(Self) -> @debug.Repr
+pub impl @box.BaseBox for FtabBox
+pub impl @bytes.Decode for FtabBox
+pub impl @bytes.Encode for FtabBox
 
 pub struct FtypBox {
   major_brand : @bytes.FourCC
@@ -1079,6 +1121,9 @@ pub(all) enum SampleEntry {
   Opus(OpusBox)
   Mp4a(Mp4aBox)
   Flac(FlacBox)
+  Stpp(StppBox)
+  Wvtt(WvttBox)
+  Tx3g(Tx3gBox)
   Unknown(UnknownBox)
 } derive(Eq, Hash, @debug.Debug)
 pub fn SampleEntry::audio_channel_count(Self) -> UInt?
@@ -1319,6 +1364,28 @@ pub impl @box.FullBox for SthdBox
 pub impl @bytes.Decode for SthdBox
 pub impl @bytes.Encode for SthdBox
 
+pub struct StppBox {
+  data_reference_index : @bytes.NonZeroU16
+  namespace_uri : @bytes.Utf8String
+  schema_location : @bytes.Utf8String
+  auxiliary_mime_types : @bytes.Utf8String
+  unknown_boxes : Array[UnknownBox]
+} derive(Eq, Hash, @debug.Debug)
+pub fn StppBox::box_type(Self) -> @bytes.BoxType
+pub fn StppBox::children(Self) -> Array[&@box.BaseBox]
+pub fn StppBox::decode(@bytes.ReadCursor) -> Self raise @bytes.Mp4Error
+pub fn StppBox::encode(Self, @bytes.WriteCursor) -> Unit raise @bytes.Mp4Error
+pub fn StppBox::equal(Self, Self) -> Bool
+pub fn StppBox::hash(Self) -> Int
+pub fn StppBox::hash_combine(Self, Hasher) -> Unit
+pub fn StppBox::is_unknown_box(Self) -> Bool
+pub fn StppBox::new(@bytes.NonZeroU16, @bytes.Utf8String, @bytes.Utf8String, @bytes.Utf8String, Array[UnknownBox]) -> Self
+pub fn StppBox::not_equal(Self, Self) -> Bool
+pub fn StppBox::to_repr(Self) -> @debug.Repr
+pub impl @box.BaseBox for StppBox
+pub impl @bytes.Decode for StppBox
+pub impl @bytes.Encode for StppBox
+
 pub struct StscBox {
   entries : Array[StscEntry]
 } derive(Eq, Hash, @debug.Debug)
@@ -1447,6 +1514,21 @@ pub fn SttsEntry::hash_combine(Self, Hasher) -> Unit
 pub fn SttsEntry::new(UInt, UInt) -> Self
 pub fn SttsEntry::not_equal(Self, Self) -> Bool
 pub fn SttsEntry::to_repr(Self) -> @debug.Repr
+
+pub struct StyleRecord {
+  start_char : UInt
+  end_char : UInt
+  font_id : UInt
+  face_style_flags : UInt
+  font_size : UInt
+  text_color_rgba : Bytes
+} derive(Eq, Hash, @debug.Debug)
+pub fn StyleRecord::equal(Self, Self) -> Bool
+pub fn StyleRecord::hash(Self) -> Int
+pub fn StyleRecord::hash_combine(Self, Hasher) -> Unit
+pub fn StyleRecord::new(UInt, UInt, UInt, UInt, UInt, Bytes) -> Self
+pub fn StyleRecord::not_equal(Self, Self) -> Bool
+pub fn StyleRecord::to_repr(Self) -> @debug.Repr
 
 pub struct TfdtBox {
   version : UInt
@@ -1680,6 +1762,32 @@ pub fn TrunSample::new(UInt?, UInt?, SampleFlags?, Int64?) -> Self
 pub fn TrunSample::not_equal(Self, Self) -> Bool
 pub fn TrunSample::to_repr(Self) -> @debug.Repr
 
+pub struct Tx3gBox {
+  data_reference_index : @bytes.NonZeroU16
+  display_flags : UInt
+  horizontal_justification : Int
+  vertical_justification : Int
+  background_color_rgba : Bytes
+  default_text_box : BoxRecord
+  default_style : StyleRecord
+  ftab_box : FtabBox
+  unknown_boxes : Array[UnknownBox]
+} derive(Eq, Hash, @debug.Debug)
+pub fn Tx3gBox::box_type(Self) -> @bytes.BoxType
+pub fn Tx3gBox::children(Self) -> Array[&@box.BaseBox]
+pub fn Tx3gBox::decode(@bytes.ReadCursor) -> Self raise @bytes.Mp4Error
+pub fn Tx3gBox::encode(Self, @bytes.WriteCursor) -> Unit raise @bytes.Mp4Error
+pub fn Tx3gBox::equal(Self, Self) -> Bool
+pub fn Tx3gBox::hash(Self) -> Int
+pub fn Tx3gBox::hash_combine(Self, Hasher) -> Unit
+pub fn Tx3gBox::is_unknown_box(Self) -> Bool
+pub fn Tx3gBox::new(@bytes.NonZeroU16, UInt, Int, Int, Bytes, BoxRecord, StyleRecord, FtabBox, Array[UnknownBox]) -> Self
+pub fn Tx3gBox::not_equal(Self, Self) -> Bool
+pub fn Tx3gBox::to_repr(Self) -> @debug.Repr
+pub impl @box.BaseBox for Tx3gBox
+pub impl @bytes.Decode for Tx3gBox
+pub impl @bytes.Encode for Tx3gBox
+
 pub struct UnknownBox {
   box_type : @bytes.BoxType
   box_size : @box.BoxSize
@@ -1842,6 +1950,44 @@ pub impl @box.BaseBox for VpccBox
 pub impl @box.FullBox for VpccBox
 pub impl @bytes.Decode for VpccBox
 pub impl @bytes.Encode for VpccBox
+
+pub struct VttCBox {
+  config : String
+} derive(Eq, Hash, @debug.Debug)
+pub fn VttCBox::box_type(Self) -> @bytes.BoxType
+pub fn VttCBox::children(Self) -> Array[&@box.BaseBox]
+pub fn VttCBox::decode(@bytes.ReadCursor) -> Self raise @bytes.Mp4Error
+pub fn VttCBox::encode(Self, @bytes.WriteCursor) -> Unit raise @bytes.Mp4Error
+pub fn VttCBox::equal(Self, Self) -> Bool
+pub fn VttCBox::hash(Self) -> Int
+pub fn VttCBox::hash_combine(Self, Hasher) -> Unit
+pub fn VttCBox::is_unknown_box(Self) -> Bool
+pub fn VttCBox::new(String) -> Self
+pub fn VttCBox::not_equal(Self, Self) -> Bool
+pub fn VttCBox::to_repr(Self) -> @debug.Repr
+pub impl @box.BaseBox for VttCBox
+pub impl @bytes.Decode for VttCBox
+pub impl @bytes.Encode for VttCBox
+
+pub struct WvttBox {
+  data_reference_index : @bytes.NonZeroU16
+  vttc_box : VttCBox
+  unknown_boxes : Array[UnknownBox]
+} derive(Eq, Hash, @debug.Debug)
+pub fn WvttBox::box_type(Self) -> @bytes.BoxType
+pub fn WvttBox::children(Self) -> Array[&@box.BaseBox]
+pub fn WvttBox::decode(@bytes.ReadCursor) -> Self raise @bytes.Mp4Error
+pub fn WvttBox::encode(Self, @bytes.WriteCursor) -> Unit raise @bytes.Mp4Error
+pub fn WvttBox::equal(Self, Self) -> Bool
+pub fn WvttBox::hash(Self) -> Int
+pub fn WvttBox::hash_combine(Self, Hasher) -> Unit
+pub fn WvttBox::is_unknown_box(Self) -> Bool
+pub fn WvttBox::new(@bytes.NonZeroU16, VttCBox, Array[UnknownBox]) -> Self
+pub fn WvttBox::not_equal(Self, Self) -> Bool
+pub fn WvttBox::to_repr(Self) -> @debug.Repr
+pub impl @box.BaseBox for WvttBox
+pub impl @bytes.Decode for WvttBox
+pub impl @bytes.Encode for WvttBox
 
 // Type aliases
 
