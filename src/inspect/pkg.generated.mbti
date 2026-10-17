@@ -1,0 +1,24 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "gpui-mbt/mp4/inspect"
+
+import {
+  "gpui-mbt/mp4/boxes",
+  "gpui-mbt/mp4/demux",
+}
+
+// Values
+pub fn box_rows(Array[@boxes.BoxNode]) -> Array[String]
+
+pub fn hex_dump(Bytes, Int) -> Array[String]
+
+pub fn sample_rows(Array[@demux.Sample], Int, Int) -> Array[String]
+
+pub fn track_rows(Array[@demux.TrackInfo]) -> Array[String]
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

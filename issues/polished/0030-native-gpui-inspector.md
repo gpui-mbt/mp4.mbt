@@ -108,3 +108,10 @@ Upstream baseline: [shiguredo/mp4-rs@1282b704f44184ec792e1549b5d31e0c4c54dc59](h
 - 未決事項: gpui.mbtの互換バージョン、Nativeデモのpackage名・配置、LinuxでのCI起動可否は実装時に確定し、本issueへ追記する。
 - 証跡: 実機のスクリーンショットと操作ログ、canonical JSON比較の一致/不一致とfield path、読み込み計測の条件（host・fixture）を残す。
 - 2026-10-16: 本文を実装可能な形式へ整備し、実装に着手可能なため polished へ更新。
+
+## 進捗
+
+- `src/inspect` に gpui/OS 非依存の portable view model（box tree rows / track rows /
+  仮想 sample window / hex dump）を追加し、unit test を追加した。
+- gpui native host・ファイル選択・ウィンドウ E2E・大容量 read 計測は **NOT_RUN**。
+  本 issue は未完了のため `issues/polished/` に残す。
