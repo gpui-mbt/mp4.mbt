@@ -279,6 +279,19 @@ pub fn ReadCursor::read_fixed_8_8_unsigned(
 }
 
 ///|
+/// `u16.u16` の固定小数点数（16.16、符号なし整数部）を読む。
+///
+/// サンプルエントリーの `horizresolution` / `samplerate` のように整数部が
+/// 符号なしの 16.16 に使う。整数部は `0..=65535` として読む。
+pub fn ReadCursor::read_fixed_16_16_unsigned(
+  self : ReadCursor,
+) -> FixedPointNumber raise Mp4Error {
+  let integer = self.read_u16()
+  let fraction = self.read_u16()
+  FixedPointNumber::new(integer.reinterpret_as_int(), fraction)
+}
+
+///|
 /// FourCC（生 4 バイト）を読む。
 pub fn ReadCursor::read_fourcc(self : ReadCursor) -> FourCC raise Mp4Error {
   let bytes = self.read_bytes(4)

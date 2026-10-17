@@ -136,6 +136,19 @@ pub fn WriteCursor::write_fixed_8_8_unsigned(
 }
 
 ///|
+/// `u16.u16` の固定小数点数（16.16、符号なし整数部）を書く。
+///
+/// [`ReadCursor::read_fixed_16_16_unsigned`] の対になる書き込みで、
+/// 整数部は下位 16-bit を生バイトとして書く。
+pub fn WriteCursor::write_fixed_16_16_unsigned(
+  self : WriteCursor,
+  value : FixedPointNumber,
+) -> Unit {
+  self.write_u16(value.integer().reinterpret_as_uint())
+  self.write_u16(value.fraction())
+}
+
+///|
 /// FourCC の 4 バイトを書く。
 pub fn WriteCursor::write_fourcc(self : WriteCursor, value : FourCC) -> Unit {
   self.buffer.write_bytes(value.as_bytes())

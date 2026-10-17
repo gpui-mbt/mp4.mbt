@@ -264,6 +264,102 @@ fn stss_type() -> @bytes.BoxType {
 }
 
 ///|
+/// `avc1` のボックス種別。上流 `Avc1Box::TYPE` に対応する。
+fn avc1_type() -> @bytes.BoxType {
+  normal_box_type(b"avc1")
+}
+
+///|
+/// `avcC` のボックス種別。上流 `AvccBox::TYPE` に対応する。
+fn avcc_type() -> @bytes.BoxType {
+  normal_box_type(b"avcC")
+}
+
+///|
+/// `hev1` のボックス種別。上流 `Hev1Box::TYPE` に対応する。
+fn hev1_type() -> @bytes.BoxType {
+  normal_box_type(b"hev1")
+}
+
+///|
+/// `hvc1` のボックス種別。上流 `Hvc1Box::TYPE` に対応する。
+fn hvc1_type() -> @bytes.BoxType {
+  normal_box_type(b"hvc1")
+}
+
+///|
+/// `hvcC` のボックス種別。上流 `HvccBox::TYPE` に対応する。
+fn hvcc_type() -> @bytes.BoxType {
+  normal_box_type(b"hvcC")
+}
+
+///|
+/// `vp08` のボックス種別。上流 `Vp08Box::TYPE` に対応する。
+fn vp08_type() -> @bytes.BoxType {
+  normal_box_type(b"vp08")
+}
+
+///|
+/// `vp09` のボックス種別。上流 `Vp09Box::TYPE` に対応する。
+fn vp09_type() -> @bytes.BoxType {
+  normal_box_type(b"vp09")
+}
+
+///|
+/// `vpcC` のボックス種別。上流 `VpccBox::TYPE` に対応する。
+fn vpcc_type() -> @bytes.BoxType {
+  normal_box_type(b"vpcC")
+}
+
+///|
+/// `av01` のボックス種別。上流 `Av01Box::TYPE` に対応する。
+fn av01_type() -> @bytes.BoxType {
+  normal_box_type(b"av01")
+}
+
+///|
+/// `av1C` のボックス種別。上流 `Av1cBox::TYPE` に対応する。
+fn av1c_type() -> @bytes.BoxType {
+  normal_box_type(b"av1C")
+}
+
+///|
+/// `Opus` のボックス種別。上流 `OpusBox::TYPE` に対応する。
+fn opus_type() -> @bytes.BoxType {
+  normal_box_type(b"Opus")
+}
+
+///|
+/// `dOps` のボックス種別。上流 `DopsBox::TYPE` に対応する。
+fn dops_type() -> @bytes.BoxType {
+  normal_box_type(b"dOps")
+}
+
+///|
+/// `mp4a` のボックス種別。上流 `Mp4aBox::TYPE` に対応する。
+fn mp4a_type() -> @bytes.BoxType {
+  normal_box_type(b"mp4a")
+}
+
+///|
+/// `esds` のボックス種別。上流 `EsdsBox::TYPE` に対応する。
+fn esds_type() -> @bytes.BoxType {
+  normal_box_type(b"esds")
+}
+
+///|
+/// `fLaC` のボックス種別。上流 `FlacBox::TYPE` に対応する。
+fn flac_type() -> @bytes.BoxType {
+  normal_box_type(b"fLaC")
+}
+
+///|
+/// `dfLa` のボックス種別。上流 `DflaBox::TYPE` に対応する。
+fn dfla_type() -> @bytes.BoxType {
+  normal_box_type(b"dfLa")
+}
+
+///|
 /// `@box.BoxHeader::decode_header_and_payload` が返した payload view を、
 /// 追加のコピーなしで読むカーソルへ変換する。
 fn payload_cursor_of(

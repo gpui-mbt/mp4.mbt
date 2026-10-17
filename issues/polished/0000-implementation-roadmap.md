@@ -175,7 +175,7 @@ M1 では**動画そのものの再生や変換**を UI に表示できなくて
 - [x] [0007 ftyp・mdat・free・UnknownBoxとBox treeを実装する](../done/0007-root-box-tree.md) — P0 / deps: 0006
 - [x] [0008 moov／trak／mdia／minfと時刻情報を移植する](../done/0008-movie-track-boxes.md) — P0 / deps: 0007
 - [x] [0009 stblとSampleTableAccessorを移植する](../done/0009-sample-tables.md) — P0 / deps: 0008
-- [ ] [0010 video／audio SampleEntryの型付き対応を作る](./0010-sample-entries.md) — P0 / deps: 0008, 0009
+- [x] [0010 video／audio SampleEntryの型付き対応を作る](../done/0010-sample-entries.md) — P0 / deps: 0008, 0009
 - [ ] [0011 RFC 6381 codec stringをSampleEntryから生成する](./0011-codec-strings.md) — P1 / deps: 0010
 - [ ] [0012 MP4／fMP4種別検出をRange I/Oで実装する](./0012-file-kind-detector.md) — P0 / deps: 0007, 0008
 - [ ] [0013 Sans I/O通常MP4 Demuxerを移植する](./0013-mp4-file-demux.md) — P0 / deps: 0009, 0010, 0012

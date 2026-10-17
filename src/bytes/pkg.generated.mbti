@@ -151,6 +151,24 @@ pub fn Mp4FileTime::to_repr(Self) -> @debug.Repr
 pub impl Compare for Mp4FileTime
 pub impl Default for Mp4FileTime
 
+pub struct NonZeroU16 {
+  value : UInt
+} derive(Eq, Hash, @debug.Debug)
+pub fn NonZeroU16::decode(ReadCursor) -> Self raise Mp4Error
+pub fn NonZeroU16::default() -> Self
+pub fn NonZeroU16::encode(Self, WriteCursor) -> Unit raise Mp4Error
+pub fn NonZeroU16::equal(Self, Self) -> Bool
+pub fn NonZeroU16::get(Self) -> UInt
+pub fn NonZeroU16::hash(Self) -> Int
+pub fn NonZeroU16::hash_combine(Self, Hasher) -> Unit
+pub fn NonZeroU16::new(UInt) -> Self?
+pub fn NonZeroU16::not_equal(Self, Self) -> Bool
+pub fn NonZeroU16::one() -> Self
+pub fn NonZeroU16::to_repr(Self) -> @debug.Repr
+pub impl Decode for NonZeroU16
+pub impl Encode for NonZeroU16
+pub impl Default for NonZeroU16
+
 pub struct NonZeroU32 {
   value : UInt
 } derive(Eq, Hash, @debug.Debug)
@@ -204,6 +222,7 @@ pub fn ReadCursor::position(Self) -> Int
 pub fn ReadCursor::read_bytes(Self, Int) -> Bytes raise Mp4Error
 pub fn ReadCursor::read_bytes_view(Self, Int) -> BytesView raise Mp4Error
 pub fn ReadCursor::read_fixed_16_16(Self) -> FixedPointNumber raise Mp4Error
+pub fn ReadCursor::read_fixed_16_16_unsigned(Self) -> FixedPointNumber raise Mp4Error
 pub fn ReadCursor::read_fixed_8_8(Self) -> FixedPointNumber raise Mp4Error
 pub fn ReadCursor::read_fixed_8_8_unsigned(Self) -> FixedPointNumber raise Mp4Error
 pub fn ReadCursor::read_fourcc(Self) -> FourCC raise Mp4Error
@@ -234,6 +253,22 @@ pub fn TrackKind::hash(Self) -> Int
 pub fn TrackKind::hash_combine(Self, Hasher) -> Unit
 pub fn TrackKind::not_equal(Self, Self) -> Bool
 pub fn TrackKind::to_repr(Self) -> @debug.Repr
+
+pub struct Uint {
+  value : UInt64
+  bits : Int
+  offset : Int
+} derive(Eq, Hash, @debug.Debug)
+pub fn Uint::as_bool(Self) -> Bool
+pub fn Uint::equal(Self, Self) -> Bool
+pub fn Uint::from_bits(UInt64, bits~ : Int, offset~ : Int) -> Self
+pub fn Uint::get(Self) -> UInt64
+pub fn Uint::hash(Self) -> Int
+pub fn Uint::hash_combine(Self, Hasher) -> Unit
+pub fn Uint::new(UInt64, bits~ : Int, offset~ : Int) -> Self?
+pub fn Uint::not_equal(Self, Self) -> Bool
+pub fn Uint::to_bits(Self) -> UInt64
+pub fn Uint::to_repr(Self) -> @debug.Repr
 
 pub struct Utf8String {
   value : String
@@ -276,6 +311,7 @@ pub fn WriteCursor::to_bytes(Self) -> Bytes
 pub fn WriteCursor::write_bytes(Self, Bytes) -> Unit
 pub fn WriteCursor::write_bytes_view(Self, BytesView) -> Unit
 pub fn WriteCursor::write_fixed_16_16(Self, FixedPointNumber) -> Unit
+pub fn WriteCursor::write_fixed_16_16_unsigned(Self, FixedPointNumber) -> Unit
 pub fn WriteCursor::write_fixed_8_8(Self, FixedPointNumber) -> Unit
 pub fn WriteCursor::write_fixed_8_8_unsigned(Self, FixedPointNumber) -> Unit
 pub fn WriteCursor::write_fourcc(Self, FourCC) -> Unit

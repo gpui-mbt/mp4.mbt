@@ -30,6 +30,120 @@ pub(all) suberror SampleTableAccessorError {
 pub fn SampleTableAccessorError::to_string(Self) -> String
 
 // Types and methods
+pub struct AudioSampleEntryFields {
+  data_reference_index : @bytes.NonZeroU16
+  channelcount : UInt
+  samplesize : UInt
+  samplerate : @bytes.FixedPointNumber
+} derive(Eq, Hash, @debug.Debug)
+pub fn AudioSampleEntryFields::decode(@bytes.ReadCursor) -> Self raise @bytes.Mp4Error
+pub fn AudioSampleEntryFields::default_data_reference_index() -> @bytes.NonZeroU16
+pub fn AudioSampleEntryFields::default_samplesize() -> UInt
+pub fn AudioSampleEntryFields::encode(Self, @bytes.WriteCursor) -> Unit raise @bytes.Mp4Error
+pub fn AudioSampleEntryFields::equal(Self, Self) -> Bool
+pub fn AudioSampleEntryFields::hash(Self) -> Int
+pub fn AudioSampleEntryFields::hash_combine(Self, Hasher) -> Unit
+pub fn AudioSampleEntryFields::new(@bytes.NonZeroU16, UInt, UInt, @bytes.FixedPointNumber) -> Self
+pub fn AudioSampleEntryFields::not_equal(Self, Self) -> Bool
+pub fn AudioSampleEntryFields::to_repr(Self) -> @debug.Repr
+pub impl @bytes.Decode for AudioSampleEntryFields
+pub impl @bytes.Encode for AudioSampleEntryFields
+
+pub struct Av01Box {
+  visual : VisualSampleEntryFields
+  av1c_box : Av1cBox
+  unknown_boxes : Array[UnknownBox]
+} derive(Eq, Hash, @debug.Debug)
+pub fn Av01Box::box_type(Self) -> @bytes.BoxType
+pub fn Av01Box::children(Self) -> Array[&@box.BaseBox]
+pub fn Av01Box::decode(@bytes.ReadCursor) -> Self raise @bytes.Mp4Error
+pub fn Av01Box::encode(Self, @bytes.WriteCursor) -> Unit raise @bytes.Mp4Error
+pub fn Av01Box::equal(Self, Self) -> Bool
+pub fn Av01Box::hash(Self) -> Int
+pub fn Av01Box::hash_combine(Self, Hasher) -> Unit
+pub fn Av01Box::is_unknown_box(Self) -> Bool
+pub fn Av01Box::new(VisualSampleEntryFields, Av1cBox, Array[UnknownBox]) -> Self
+pub fn Av01Box::not_equal(Self, Self) -> Bool
+pub fn Av01Box::to_repr(Self) -> @debug.Repr
+pub impl @box.BaseBox for Av01Box
+pub impl @bytes.Decode for Av01Box
+pub impl @bytes.Encode for Av01Box
+
+pub struct Av1cBox {
+  seq_profile : @bytes.Uint
+  seq_level_idx_0 : @bytes.Uint
+  seq_tier_0 : @bytes.Uint
+  high_bitdepth : @bytes.Uint
+  twelve_bit : @bytes.Uint
+  monochrome : @bytes.Uint
+  chroma_subsampling_x : @bytes.Uint
+  chroma_subsampling_y : @bytes.Uint
+  chroma_sample_position : @bytes.Uint
+  initial_presentation_delay_minus_one : @bytes.Uint?
+  config_obus : Bytes
+} derive(Eq, Hash, @debug.Debug)
+pub fn Av1cBox::box_type(Self) -> @bytes.BoxType
+pub fn Av1cBox::children(Self) -> Array[&@box.BaseBox]
+pub fn Av1cBox::decode(@bytes.ReadCursor) -> Self raise @bytes.Mp4Error
+pub fn Av1cBox::encode(Self, @bytes.WriteCursor) -> Unit raise @bytes.Mp4Error
+pub fn Av1cBox::equal(Self, Self) -> Bool
+pub fn Av1cBox::hash(Self) -> Int
+pub fn Av1cBox::hash_combine(Self, Hasher) -> Unit
+pub fn Av1cBox::is_unknown_box(Self) -> Bool
+pub fn Av1cBox::new(@bytes.Uint, @bytes.Uint, @bytes.Uint, @bytes.Uint, @bytes.Uint, @bytes.Uint, @bytes.Uint, @bytes.Uint, @bytes.Uint, @bytes.Uint?, Bytes) -> Self
+pub fn Av1cBox::not_equal(Self, Self) -> Bool
+pub fn Av1cBox::to_repr(Self) -> @debug.Repr
+pub impl @box.BaseBox for Av1cBox
+pub impl @bytes.Decode for Av1cBox
+pub impl @bytes.Encode for Av1cBox
+
+pub struct Avc1Box {
+  visual : VisualSampleEntryFields
+  avcc_box : AvccBox
+  unknown_boxes : Array[UnknownBox]
+} derive(Eq, Hash, @debug.Debug)
+pub fn Avc1Box::box_type(Self) -> @bytes.BoxType
+pub fn Avc1Box::children(Self) -> Array[&@box.BaseBox]
+pub fn Avc1Box::decode(@bytes.ReadCursor) -> Self raise @bytes.Mp4Error
+pub fn Avc1Box::encode(Self, @bytes.WriteCursor) -> Unit raise @bytes.Mp4Error
+pub fn Avc1Box::equal(Self, Self) -> Bool
+pub fn Avc1Box::hash(Self) -> Int
+pub fn Avc1Box::hash_combine(Self, Hasher) -> Unit
+pub fn Avc1Box::is_unknown_box(Self) -> Bool
+pub fn Avc1Box::new(VisualSampleEntryFields, AvccBox, Array[UnknownBox]) -> Self
+pub fn Avc1Box::not_equal(Self, Self) -> Bool
+pub fn Avc1Box::to_repr(Self) -> @debug.Repr
+pub impl @box.BaseBox for Avc1Box
+pub impl @bytes.Decode for Avc1Box
+pub impl @bytes.Encode for Avc1Box
+
+pub struct AvccBox {
+  avc_profile_indication : UInt
+  profile_compatibility : UInt
+  avc_level_indication : UInt
+  length_size_minus_one : @bytes.Uint
+  sps_list : Array[Bytes]
+  pps_list : Array[Bytes]
+  chroma_format : @bytes.Uint?
+  bit_depth_luma_minus8 : @bytes.Uint?
+  bit_depth_chroma_minus8 : @bytes.Uint?
+  sps_ext_list : Array[Bytes]
+} derive(Eq, Hash, @debug.Debug)
+pub fn AvccBox::box_type(Self) -> @bytes.BoxType
+pub fn AvccBox::children(Self) -> Array[&@box.BaseBox]
+pub fn AvccBox::decode(@bytes.ReadCursor) -> Self raise @bytes.Mp4Error
+pub fn AvccBox::encode(Self, @bytes.WriteCursor) -> Unit raise @bytes.Mp4Error
+pub fn AvccBox::equal(Self, Self) -> Bool
+pub fn AvccBox::hash(Self) -> Int
+pub fn AvccBox::hash_combine(Self, Hasher) -> Unit
+pub fn AvccBox::is_unknown_box(Self) -> Bool
+pub fn AvccBox::new(UInt, UInt, UInt, @bytes.Uint, Array[Bytes], Array[Bytes], @bytes.Uint?, @bytes.Uint?, @bytes.Uint?, Array[Bytes]) -> Self
+pub fn AvccBox::not_equal(Self, Self) -> Bool
+pub fn AvccBox::to_repr(Self) -> @debug.Repr
+pub impl @box.BaseBox for AvccBox
+pub impl @bytes.Decode for AvccBox
+pub impl @bytes.Encode for AvccBox
+
 pub struct BoxNode {
   box_type : @bytes.BoxType
   start : UInt64
@@ -151,6 +265,64 @@ pub fn CttsEntry::new(UInt, Int64) -> Self
 pub fn CttsEntry::not_equal(Self, Self) -> Bool
 pub fn CttsEntry::to_repr(Self) -> @debug.Repr
 
+pub struct DecoderConfigDescriptor {
+  object_type_indication : UInt
+  stream_type : @bytes.Uint
+  up_stream : @bytes.Uint
+  buffer_size_db : @bytes.Uint
+  max_bitrate : UInt
+  avg_bitrate : UInt
+  dec_specific_info : DecoderSpecificInfo?
+} derive(Eq, Hash, @debug.Debug)
+pub fn DecoderConfigDescriptor::decode(@bytes.ReadCursor) -> Self raise @bytes.Mp4Error
+pub fn DecoderConfigDescriptor::encode(Self, @bytes.WriteCursor) -> Unit raise @bytes.Mp4Error
+pub fn DecoderConfigDescriptor::equal(Self, Self) -> Bool
+pub fn DecoderConfigDescriptor::hash(Self) -> Int
+pub fn DecoderConfigDescriptor::hash_combine(Self, Hasher) -> Unit
+pub fn DecoderConfigDescriptor::new(UInt, @bytes.Uint, @bytes.Uint, @bytes.Uint, UInt, UInt, DecoderSpecificInfo?) -> Self
+pub fn DecoderConfigDescriptor::not_equal(Self, Self) -> Bool
+pub fn DecoderConfigDescriptor::object_type_indication_audio_iso_iec_14496_3() -> UInt
+pub fn DecoderConfigDescriptor::stream_type_audio() -> @bytes.Uint
+pub fn DecoderConfigDescriptor::to_repr(Self) -> @debug.Repr
+pub fn DecoderConfigDescriptor::up_stream_false() -> @bytes.Uint
+pub impl @bytes.Decode for DecoderConfigDescriptor
+pub impl @bytes.Encode for DecoderConfigDescriptor
+
+pub struct DecoderSpecificInfo {
+  payload : Bytes
+} derive(Eq, Hash, @debug.Debug)
+pub fn DecoderSpecificInfo::decode(@bytes.ReadCursor) -> Self raise @bytes.Mp4Error
+pub fn DecoderSpecificInfo::encode(Self, @bytes.WriteCursor) -> Unit raise @bytes.Mp4Error
+pub fn DecoderSpecificInfo::equal(Self, Self) -> Bool
+pub fn DecoderSpecificInfo::hash(Self) -> Int
+pub fn DecoderSpecificInfo::hash_combine(Self, Hasher) -> Unit
+pub fn DecoderSpecificInfo::new(Bytes) -> Self
+pub fn DecoderSpecificInfo::not_equal(Self, Self) -> Bool
+pub fn DecoderSpecificInfo::to_repr(Self) -> @debug.Repr
+pub impl @bytes.Decode for DecoderSpecificInfo
+pub impl @bytes.Encode for DecoderSpecificInfo
+
+pub struct DflaBox {
+  metadata_blocks : Array[FlacMetadataBlock]
+} derive(Eq, Hash, @debug.Debug)
+pub fn DflaBox::box_type(Self) -> @bytes.BoxType
+pub fn DflaBox::children(Self) -> Array[&@box.BaseBox]
+pub fn DflaBox::decode(@bytes.ReadCursor) -> Self raise @bytes.Mp4Error
+pub fn DflaBox::encode(Self, @bytes.WriteCursor) -> Unit raise @bytes.Mp4Error
+pub fn DflaBox::equal(Self, Self) -> Bool
+pub fn DflaBox::full_box_flags(Self) -> @box.FullBoxFlags
+pub fn DflaBox::full_box_version(Self) -> UInt
+pub fn DflaBox::hash(Self) -> Int
+pub fn DflaBox::hash_combine(Self, Hasher) -> Unit
+pub fn DflaBox::is_unknown_box(Self) -> Bool
+pub fn DflaBox::new(Array[FlacMetadataBlock]) -> Self
+pub fn DflaBox::not_equal(Self, Self) -> Bool
+pub fn DflaBox::to_repr(Self) -> @debug.Repr
+pub impl @box.BaseBox for DflaBox
+pub impl @box.FullBox for DflaBox
+pub impl @bytes.Decode for DflaBox
+pub impl @bytes.Encode for DflaBox
+
 pub struct DinfBox {
   dref_box : DrefBox
   unknown_boxes : Array[UnknownBox]
@@ -170,6 +342,27 @@ pub fn DinfBox::to_repr(Self) -> @debug.Repr
 pub impl @box.BaseBox for DinfBox
 pub impl @bytes.Decode for DinfBox
 pub impl @bytes.Encode for DinfBox
+
+pub struct DopsBox {
+  output_channel_count : UInt
+  pre_skip : UInt
+  input_sample_rate : UInt
+  output_gain : Int16
+} derive(Eq, Hash, @debug.Debug)
+pub fn DopsBox::box_type(Self) -> @bytes.BoxType
+pub fn DopsBox::children(Self) -> Array[&@box.BaseBox]
+pub fn DopsBox::decode(@bytes.ReadCursor) -> Self raise @bytes.Mp4Error
+pub fn DopsBox::encode(Self, @bytes.WriteCursor) -> Unit raise @bytes.Mp4Error
+pub fn DopsBox::equal(Self, Self) -> Bool
+pub fn DopsBox::hash(Self) -> Int
+pub fn DopsBox::hash_combine(Self, Hasher) -> Unit
+pub fn DopsBox::is_unknown_box(Self) -> Bool
+pub fn DopsBox::new(UInt, UInt, UInt, Int16) -> Self
+pub fn DopsBox::not_equal(Self, Self) -> Bool
+pub fn DopsBox::to_repr(Self) -> @debug.Repr
+pub impl @box.BaseBox for DopsBox
+pub impl @bytes.Decode for DopsBox
+pub impl @bytes.Encode for DopsBox
 
 pub struct DrefBox {
   url_box : UrlBox?
@@ -246,6 +439,92 @@ pub fn ElstEntry::new(UInt64, Int64, @bytes.FixedPointNumber) -> Self
 pub fn ElstEntry::not_equal(Self, Self) -> Bool
 pub fn ElstEntry::to_repr(Self) -> @debug.Repr
 
+pub struct EsDescriptor {
+  es_id : UInt
+  stream_priority : @bytes.Uint
+  depends_on_es_id : UInt?
+  url_string : String?
+  ocr_es_id : UInt?
+  dec_config_descr : DecoderConfigDescriptor
+  sl_config_descr : SlConfigDescriptor
+} derive(Eq, Hash, @debug.Debug)
+pub fn EsDescriptor::decode(@bytes.ReadCursor) -> Self raise @bytes.Mp4Error
+pub fn EsDescriptor::encode(Self, @bytes.WriteCursor) -> Unit raise @bytes.Mp4Error
+pub fn EsDescriptor::equal(Self, Self) -> Bool
+pub fn EsDescriptor::hash(Self) -> Int
+pub fn EsDescriptor::hash_combine(Self, Hasher) -> Unit
+pub fn EsDescriptor::lowest_stream_priority() -> @bytes.Uint
+pub fn EsDescriptor::min_es_id() -> UInt
+pub fn EsDescriptor::new(UInt, @bytes.Uint, UInt?, String?, UInt?, DecoderConfigDescriptor, SlConfigDescriptor) -> Self
+pub fn EsDescriptor::not_equal(Self, Self) -> Bool
+pub fn EsDescriptor::to_repr(Self) -> @debug.Repr
+pub impl @bytes.Decode for EsDescriptor
+pub impl @bytes.Encode for EsDescriptor
+
+pub struct EsdsBox {
+  es : EsDescriptor
+} derive(Eq, Hash, @debug.Debug)
+pub fn EsdsBox::box_type(Self) -> @bytes.BoxType
+pub fn EsdsBox::children(Self) -> Array[&@box.BaseBox]
+pub fn EsdsBox::decode(@bytes.ReadCursor) -> Self raise @bytes.Mp4Error
+pub fn EsdsBox::encode(Self, @bytes.WriteCursor) -> Unit raise @bytes.Mp4Error
+pub fn EsdsBox::equal(Self, Self) -> Bool
+pub fn EsdsBox::full_box_flags(Self) -> @box.FullBoxFlags
+pub fn EsdsBox::full_box_version(Self) -> UInt
+pub fn EsdsBox::hash(Self) -> Int
+pub fn EsdsBox::hash_combine(Self, Hasher) -> Unit
+pub fn EsdsBox::is_unknown_box(Self) -> Bool
+pub fn EsdsBox::new(EsDescriptor) -> Self
+pub fn EsdsBox::not_equal(Self, Self) -> Bool
+pub fn EsdsBox::to_repr(Self) -> @debug.Repr
+pub impl @box.BaseBox for EsdsBox
+pub impl @box.FullBox for EsdsBox
+pub impl @bytes.Decode for EsdsBox
+pub impl @bytes.Encode for EsdsBox
+
+pub struct FlacBox {
+  audio : AudioSampleEntryFields
+  dfla_box : DflaBox
+  unknown_boxes : Array[UnknownBox]
+} derive(Eq, Hash, @debug.Debug)
+pub fn FlacBox::box_type(Self) -> @bytes.BoxType
+pub fn FlacBox::children(Self) -> Array[&@box.BaseBox]
+pub fn FlacBox::decode(@bytes.ReadCursor) -> Self raise @bytes.Mp4Error
+pub fn FlacBox::encode(Self, @bytes.WriteCursor) -> Unit raise @bytes.Mp4Error
+pub fn FlacBox::equal(Self, Self) -> Bool
+pub fn FlacBox::hash(Self) -> Int
+pub fn FlacBox::hash_combine(Self, Hasher) -> Unit
+pub fn FlacBox::is_unknown_box(Self) -> Bool
+pub fn FlacBox::new(AudioSampleEntryFields, DflaBox, Array[UnknownBox]) -> Self
+pub fn FlacBox::not_equal(Self, Self) -> Bool
+pub fn FlacBox::to_repr(Self) -> @debug.Repr
+pub impl @box.BaseBox for FlacBox
+pub impl @bytes.Decode for FlacBox
+pub impl @bytes.Encode for FlacBox
+
+pub struct FlacMetadataBlock {
+  last_metadata_block_flag : @bytes.Uint
+  block_type : @bytes.Uint
+  block_data : Bytes
+} derive(Eq, Hash, @debug.Debug)
+pub fn FlacMetadataBlock::block_type_application() -> @bytes.Uint
+pub fn FlacMetadataBlock::block_type_cuesheet() -> @bytes.Uint
+pub fn FlacMetadataBlock::block_type_padding() -> @bytes.Uint
+pub fn FlacMetadataBlock::block_type_picture() -> @bytes.Uint
+pub fn FlacMetadataBlock::block_type_seektable() -> @bytes.Uint
+pub fn FlacMetadataBlock::block_type_streaminfo() -> @bytes.Uint
+pub fn FlacMetadataBlock::block_type_vorbis_comment() -> @bytes.Uint
+pub fn FlacMetadataBlock::decode(@bytes.ReadCursor) -> Self raise @bytes.Mp4Error
+pub fn FlacMetadataBlock::encode(Self, @bytes.WriteCursor) -> Unit raise @bytes.Mp4Error
+pub fn FlacMetadataBlock::equal(Self, Self) -> Bool
+pub fn FlacMetadataBlock::hash(Self) -> Int
+pub fn FlacMetadataBlock::hash_combine(Self, Hasher) -> Unit
+pub fn FlacMetadataBlock::new(@bytes.Uint, @bytes.Uint, Bytes) -> Self
+pub fn FlacMetadataBlock::not_equal(Self, Self) -> Bool
+pub fn FlacMetadataBlock::to_repr(Self) -> @debug.Repr
+pub impl @bytes.Decode for FlacMetadataBlock
+pub impl @bytes.Encode for FlacMetadataBlock
+
 pub struct FreeBox {
   payload : Bytes
 } derive(Eq, @debug.Debug)
@@ -304,6 +583,92 @@ pub impl @box.BaseBox for HdlrBox
 pub impl @box.FullBox for HdlrBox
 pub impl @bytes.Decode for HdlrBox
 pub impl @bytes.Encode for HdlrBox
+
+pub struct Hev1Box {
+  visual : VisualSampleEntryFields
+  hvcc_box : HvccBox
+  unknown_boxes : Array[UnknownBox]
+} derive(Eq, Hash, @debug.Debug)
+pub fn Hev1Box::box_type(Self) -> @bytes.BoxType
+pub fn Hev1Box::children(Self) -> Array[&@box.BaseBox]
+pub fn Hev1Box::decode(@bytes.ReadCursor) -> Self raise @bytes.Mp4Error
+pub fn Hev1Box::encode(Self, @bytes.WriteCursor) -> Unit raise @bytes.Mp4Error
+pub fn Hev1Box::equal(Self, Self) -> Bool
+pub fn Hev1Box::hash(Self) -> Int
+pub fn Hev1Box::hash_combine(Self, Hasher) -> Unit
+pub fn Hev1Box::is_unknown_box(Self) -> Bool
+pub fn Hev1Box::new(VisualSampleEntryFields, HvccBox, Array[UnknownBox]) -> Self
+pub fn Hev1Box::not_equal(Self, Self) -> Bool
+pub fn Hev1Box::to_repr(Self) -> @debug.Repr
+pub impl @box.BaseBox for Hev1Box
+pub impl @bytes.Decode for Hev1Box
+pub impl @bytes.Encode for Hev1Box
+
+pub struct Hvc1Box {
+  visual : VisualSampleEntryFields
+  hvcc_box : HvccBox
+  unknown_boxes : Array[UnknownBox]
+} derive(Eq, Hash, @debug.Debug)
+pub fn Hvc1Box::box_type(Self) -> @bytes.BoxType
+pub fn Hvc1Box::children(Self) -> Array[&@box.BaseBox]
+pub fn Hvc1Box::decode(@bytes.ReadCursor) -> Self raise @bytes.Mp4Error
+pub fn Hvc1Box::encode(Self, @bytes.WriteCursor) -> Unit raise @bytes.Mp4Error
+pub fn Hvc1Box::equal(Self, Self) -> Bool
+pub fn Hvc1Box::hash(Self) -> Int
+pub fn Hvc1Box::hash_combine(Self, Hasher) -> Unit
+pub fn Hvc1Box::is_unknown_box(Self) -> Bool
+pub fn Hvc1Box::new(VisualSampleEntryFields, HvccBox, Array[UnknownBox]) -> Self
+pub fn Hvc1Box::not_equal(Self, Self) -> Bool
+pub fn Hvc1Box::to_repr(Self) -> @debug.Repr
+pub impl @box.BaseBox for Hvc1Box
+pub impl @bytes.Decode for Hvc1Box
+pub impl @bytes.Encode for Hvc1Box
+
+pub struct HvccBox {
+  general_profile_space : @bytes.Uint
+  general_tier_flag : @bytes.Uint
+  general_profile_idc : @bytes.Uint
+  general_profile_compatibility_flags : UInt
+  general_constraint_indicator_flags : @bytes.Uint
+  general_level_idc : UInt
+  min_spatial_segmentation_idc : @bytes.Uint
+  parallelism_type : @bytes.Uint
+  chroma_format_idc : @bytes.Uint
+  bit_depth_luma_minus8 : @bytes.Uint
+  bit_depth_chroma_minus8 : @bytes.Uint
+  avg_frame_rate : UInt
+  constant_frame_rate : @bytes.Uint
+  num_temporal_layers : @bytes.Uint
+  temporal_id_nested : @bytes.Uint
+  length_size_minus_one : @bytes.Uint
+  nalu_arrays : Array[HvccNalUintArray]
+} derive(Eq, Hash, @debug.Debug)
+pub fn HvccBox::box_type(Self) -> @bytes.BoxType
+pub fn HvccBox::children(Self) -> Array[&@box.BaseBox]
+pub fn HvccBox::decode(@bytes.ReadCursor) -> Self raise @bytes.Mp4Error
+pub fn HvccBox::encode(Self, @bytes.WriteCursor) -> Unit raise @bytes.Mp4Error
+pub fn HvccBox::equal(Self, Self) -> Bool
+pub fn HvccBox::hash(Self) -> Int
+pub fn HvccBox::hash_combine(Self, Hasher) -> Unit
+pub fn HvccBox::is_unknown_box(Self) -> Bool
+pub fn HvccBox::new(@bytes.Uint, @bytes.Uint, @bytes.Uint, UInt, @bytes.Uint, UInt, @bytes.Uint, @bytes.Uint, @bytes.Uint, @bytes.Uint, @bytes.Uint, UInt, @bytes.Uint, @bytes.Uint, @bytes.Uint, @bytes.Uint, Array[HvccNalUintArray]) -> Self
+pub fn HvccBox::not_equal(Self, Self) -> Bool
+pub fn HvccBox::to_repr(Self) -> @debug.Repr
+pub impl @box.BaseBox for HvccBox
+pub impl @bytes.Decode for HvccBox
+pub impl @bytes.Encode for HvccBox
+
+pub struct HvccNalUintArray {
+  array_completeness : @bytes.Uint
+  nal_unit_type : @bytes.Uint
+  nalus : Array[Bytes]
+} derive(Eq, Hash, @debug.Debug)
+pub fn HvccNalUintArray::equal(Self, Self) -> Bool
+pub fn HvccNalUintArray::hash(Self) -> Int
+pub fn HvccNalUintArray::hash_combine(Self, Hasher) -> Unit
+pub fn HvccNalUintArray::new(@bytes.Uint, @bytes.Uint, Array[Bytes]) -> Self
+pub fn HvccNalUintArray::not_equal(Self, Self) -> Bool
+pub fn HvccNalUintArray::to_repr(Self) -> @debug.Repr
 
 pub struct MdatBox {
   data_offset : UInt64
@@ -427,6 +792,26 @@ pub impl @box.BaseBox for MoovBox
 pub impl @bytes.Decode for MoovBox
 pub impl @bytes.Encode for MoovBox
 
+pub struct Mp4aBox {
+  audio : AudioSampleEntryFields
+  esds_box : EsdsBox
+  unknown_boxes : Array[UnknownBox]
+} derive(Eq, Hash, @debug.Debug)
+pub fn Mp4aBox::box_type(Self) -> @bytes.BoxType
+pub fn Mp4aBox::children(Self) -> Array[&@box.BaseBox]
+pub fn Mp4aBox::decode(@bytes.ReadCursor) -> Self raise @bytes.Mp4Error
+pub fn Mp4aBox::encode(Self, @bytes.WriteCursor) -> Unit raise @bytes.Mp4Error
+pub fn Mp4aBox::equal(Self, Self) -> Bool
+pub fn Mp4aBox::hash(Self) -> Int
+pub fn Mp4aBox::hash_combine(Self, Hasher) -> Unit
+pub fn Mp4aBox::is_unknown_box(Self) -> Bool
+pub fn Mp4aBox::new(AudioSampleEntryFields, EsdsBox, Array[UnknownBox]) -> Self
+pub fn Mp4aBox::not_equal(Self, Self) -> Bool
+pub fn Mp4aBox::to_repr(Self) -> @debug.Repr
+pub impl @box.BaseBox for Mp4aBox
+pub impl @bytes.Decode for Mp4aBox
+pub impl @bytes.Encode for Mp4aBox
+
 pub struct MvhdBox {
   creation_time : @bytes.Mp4FileTime
   modification_time : @bytes.Mp4FileTime
@@ -478,6 +863,26 @@ pub impl @box.FullBox for NmhdBox
 pub impl @bytes.Decode for NmhdBox
 pub impl @bytes.Encode for NmhdBox
 
+pub struct OpusBox {
+  audio : AudioSampleEntryFields
+  dops_box : DopsBox
+  unknown_boxes : Array[UnknownBox]
+} derive(Eq, Hash, @debug.Debug)
+pub fn OpusBox::box_type(Self) -> @bytes.BoxType
+pub fn OpusBox::children(Self) -> Array[&@box.BaseBox]
+pub fn OpusBox::decode(@bytes.ReadCursor) -> Self raise @bytes.Mp4Error
+pub fn OpusBox::encode(Self, @bytes.WriteCursor) -> Unit raise @bytes.Mp4Error
+pub fn OpusBox::equal(Self, Self) -> Bool
+pub fn OpusBox::hash(Self) -> Int
+pub fn OpusBox::hash_combine(Self, Hasher) -> Unit
+pub fn OpusBox::is_unknown_box(Self) -> Bool
+pub fn OpusBox::new(AudioSampleEntryFields, DopsBox, Array[UnknownBox]) -> Self
+pub fn OpusBox::not_equal(Self, Self) -> Bool
+pub fn OpusBox::to_repr(Self) -> @debug.Repr
+pub impl @box.BaseBox for OpusBox
+pub impl @bytes.Decode for OpusBox
+pub impl @bytes.Encode for OpusBox
+
 pub(all) enum RootBox {
   Free(FreeBox)
   Mdat(MdatBox)
@@ -508,8 +913,20 @@ pub fn SampleAccessor::sync_sample(Self) -> Self?
 pub fn SampleAccessor::timestamp(Self) -> UInt64
 
 pub(all) enum SampleEntry {
+  Avc1(Avc1Box)
+  Hev1(Hev1Box)
+  Hvc1(Hvc1Box)
+  Vp08(Vp08Box)
+  Vp09(Vp09Box)
+  Av01(Av01Box)
+  Opus(OpusBox)
+  Mp4a(Mp4aBox)
+  Flac(FlacBox)
   Unknown(UnknownBox)
 } derive(Eq, Hash, @debug.Debug)
+pub fn SampleEntry::audio_channel_count(Self) -> UInt?
+pub fn SampleEntry::audio_sample_rate(Self) -> UInt?
+pub fn SampleEntry::audio_sample_size(Self) -> UInt?
 pub fn SampleEntry::box_type(Self) -> @bytes.BoxType
 pub fn SampleEntry::children(Self) -> Array[&@box.BaseBox]
 pub fn SampleEntry::decode(@bytes.ReadCursor) -> Self raise @bytes.Mp4Error
@@ -520,6 +937,7 @@ pub fn SampleEntry::hash_combine(Self, Hasher) -> Unit
 pub fn SampleEntry::is_unknown_box(Self) -> Bool
 pub fn SampleEntry::not_equal(Self, Self) -> Bool
 pub fn SampleEntry::to_repr(Self) -> @debug.Repr
+pub fn SampleEntry::video_resolution(Self) -> (UInt, UInt)?
 pub impl @box.BaseBox for SampleEntry
 pub impl @bytes.Decode for SampleEntry
 pub impl @bytes.Encode for SampleEntry
@@ -576,6 +994,19 @@ pub fn SdtpSampleFlags::sample_is_depended_on(Self) -> Byte
 pub fn SdtpSampleFlags::to_repr(Self) -> @debug.Repr
 pub impl @bytes.Decode for SdtpSampleFlags
 pub impl @bytes.Encode for SdtpSampleFlags
+
+pub struct SlConfigDescriptor {
+} derive(Eq, Hash, @debug.Debug)
+pub fn SlConfigDescriptor::decode(@bytes.ReadCursor) -> Self raise @bytes.Mp4Error
+pub fn SlConfigDescriptor::encode(Self, @bytes.WriteCursor) -> Unit raise @bytes.Mp4Error
+pub fn SlConfigDescriptor::equal(Self, Self) -> Bool
+pub fn SlConfigDescriptor::hash(Self) -> Int
+pub fn SlConfigDescriptor::hash_combine(Self, Hasher) -> Unit
+pub fn SlConfigDescriptor::new() -> Self
+pub fn SlConfigDescriptor::not_equal(Self, Self) -> Bool
+pub fn SlConfigDescriptor::to_repr(Self) -> @debug.Repr
+pub impl @bytes.Decode for SlConfigDescriptor
+pub impl @bytes.Encode for SlConfigDescriptor
 
 pub struct SmhdBox {
   balance : @bytes.FixedPointNumber
@@ -899,6 +1330,33 @@ pub impl @box.FullBox for UrlBox
 pub impl @bytes.Decode for UrlBox
 pub impl @bytes.Encode for UrlBox
 
+pub struct VisualSampleEntryFields {
+  data_reference_index : @bytes.NonZeroU16
+  width : UInt
+  height : UInt
+  horizresolution : @bytes.FixedPointNumber
+  vertresolution : @bytes.FixedPointNumber
+  frame_count : UInt
+  compressorname : Bytes
+  depth : UInt
+} derive(Eq, Hash, @debug.Debug)
+pub fn VisualSampleEntryFields::decode(@bytes.ReadCursor) -> Self raise @bytes.Mp4Error
+pub fn VisualSampleEntryFields::default_data_reference_index() -> @bytes.NonZeroU16
+pub fn VisualSampleEntryFields::default_depth() -> UInt
+pub fn VisualSampleEntryFields::default_frame_count() -> UInt
+pub fn VisualSampleEntryFields::default_horizresolution() -> @bytes.FixedPointNumber
+pub fn VisualSampleEntryFields::default_vertresolution() -> @bytes.FixedPointNumber
+pub fn VisualSampleEntryFields::encode(Self, @bytes.WriteCursor) -> Unit raise @bytes.Mp4Error
+pub fn VisualSampleEntryFields::equal(Self, Self) -> Bool
+pub fn VisualSampleEntryFields::hash(Self) -> Int
+pub fn VisualSampleEntryFields::hash_combine(Self, Hasher) -> Unit
+pub fn VisualSampleEntryFields::new(@bytes.NonZeroU16, UInt, UInt, @bytes.FixedPointNumber, @bytes.FixedPointNumber, UInt, Bytes, UInt) -> Self raise @bytes.Mp4Error
+pub fn VisualSampleEntryFields::not_equal(Self, Self) -> Bool
+pub fn VisualSampleEntryFields::null_compressorname() -> Bytes
+pub fn VisualSampleEntryFields::to_repr(Self) -> @debug.Repr
+pub impl @bytes.Decode for VisualSampleEntryFields
+pub impl @bytes.Encode for VisualSampleEntryFields
+
 pub struct VmhdBox {
   graphicsmode : UInt16
   opcolor : Array[UInt16]
@@ -922,6 +1380,75 @@ pub impl @box.BaseBox for VmhdBox
 pub impl @box.FullBox for VmhdBox
 pub impl @bytes.Decode for VmhdBox
 pub impl @bytes.Encode for VmhdBox
+
+pub struct Vp08Box {
+  visual : VisualSampleEntryFields
+  vpcc_box : VpccBox
+  unknown_boxes : Array[UnknownBox]
+} derive(Eq, Hash, @debug.Debug)
+pub fn Vp08Box::box_type(Self) -> @bytes.BoxType
+pub fn Vp08Box::children(Self) -> Array[&@box.BaseBox]
+pub fn Vp08Box::decode(@bytes.ReadCursor) -> Self raise @bytes.Mp4Error
+pub fn Vp08Box::encode(Self, @bytes.WriteCursor) -> Unit raise @bytes.Mp4Error
+pub fn Vp08Box::equal(Self, Self) -> Bool
+pub fn Vp08Box::hash(Self) -> Int
+pub fn Vp08Box::hash_combine(Self, Hasher) -> Unit
+pub fn Vp08Box::is_unknown_box(Self) -> Bool
+pub fn Vp08Box::new(VisualSampleEntryFields, VpccBox, Array[UnknownBox]) -> Self
+pub fn Vp08Box::not_equal(Self, Self) -> Bool
+pub fn Vp08Box::to_repr(Self) -> @debug.Repr
+pub impl @box.BaseBox for Vp08Box
+pub impl @bytes.Decode for Vp08Box
+pub impl @bytes.Encode for Vp08Box
+
+pub struct Vp09Box {
+  visual : VisualSampleEntryFields
+  vpcc_box : VpccBox
+  unknown_boxes : Array[UnknownBox]
+} derive(Eq, Hash, @debug.Debug)
+pub fn Vp09Box::box_type(Self) -> @bytes.BoxType
+pub fn Vp09Box::children(Self) -> Array[&@box.BaseBox]
+pub fn Vp09Box::decode(@bytes.ReadCursor) -> Self raise @bytes.Mp4Error
+pub fn Vp09Box::encode(Self, @bytes.WriteCursor) -> Unit raise @bytes.Mp4Error
+pub fn Vp09Box::equal(Self, Self) -> Bool
+pub fn Vp09Box::hash(Self) -> Int
+pub fn Vp09Box::hash_combine(Self, Hasher) -> Unit
+pub fn Vp09Box::is_unknown_box(Self) -> Bool
+pub fn Vp09Box::new(VisualSampleEntryFields, VpccBox, Array[UnknownBox]) -> Self
+pub fn Vp09Box::not_equal(Self, Self) -> Bool
+pub fn Vp09Box::to_repr(Self) -> @debug.Repr
+pub impl @box.BaseBox for Vp09Box
+pub impl @bytes.Decode for Vp09Box
+pub impl @bytes.Encode for Vp09Box
+
+pub struct VpccBox {
+  profile : UInt
+  level : UInt
+  bit_depth : @bytes.Uint
+  chroma_subsampling : @bytes.Uint
+  video_full_range_flag : @bytes.Uint
+  colour_primaries : UInt
+  transfer_characteristics : UInt
+  matrix_coefficients : UInt
+  codec_initialization_data : Bytes
+} derive(Eq, Hash, @debug.Debug)
+pub fn VpccBox::box_type(Self) -> @bytes.BoxType
+pub fn VpccBox::children(Self) -> Array[&@box.BaseBox]
+pub fn VpccBox::decode(@bytes.ReadCursor) -> Self raise @bytes.Mp4Error
+pub fn VpccBox::encode(Self, @bytes.WriteCursor) -> Unit raise @bytes.Mp4Error
+pub fn VpccBox::equal(Self, Self) -> Bool
+pub fn VpccBox::full_box_flags(Self) -> @box.FullBoxFlags
+pub fn VpccBox::full_box_version(Self) -> UInt
+pub fn VpccBox::hash(Self) -> Int
+pub fn VpccBox::hash_combine(Self, Hasher) -> Unit
+pub fn VpccBox::is_unknown_box(Self) -> Bool
+pub fn VpccBox::new(UInt, UInt, @bytes.Uint, @bytes.Uint, @bytes.Uint, UInt, UInt, UInt, Bytes) -> Self
+pub fn VpccBox::not_equal(Self, Self) -> Bool
+pub fn VpccBox::to_repr(Self) -> @debug.Repr
+pub impl @box.BaseBox for VpccBox
+pub impl @box.FullBox for VpccBox
+pub impl @bytes.Decode for VpccBox
+pub impl @bytes.Encode for VpccBox
 
 // Type aliases
 

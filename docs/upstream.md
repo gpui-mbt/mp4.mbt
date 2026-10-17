@@ -44,9 +44,9 @@ MoonBit 側の最終的な package / 公開名は Issue 0002 で確定し、本�
 | `BaseBox` / `BoxHeader` / `BoxSize` / `BoxType` / `FullBox` / `FullBoxFlags` / `FullBoxHeader` | box envelope と共通ヘッダ | `src/box`（Issue 0006、完了） |
 | `Either<T, U>` | 2 形態の union | `src/bytes` の `Either[A, B]`（Issue 0009、完了。`BaseBox` の転送 impl は `src/box`） |
 | `FixedPointNumber` | 固定小数点数 | `src/bytes` の `FixedPointNumber`（Issue 0005、完了） |
-| `Uint` / `Utf8String` / `LanguageCode` | 基本値型 | `Utf8String` / `LanguageCode` は `src/bytes`（Issue 0008、完了）。`Uint` は後続 Issue |
+| `Uint` / `Utf8String` / `LanguageCode` | 基本値型 | `Utf8String` / `LanguageCode` は `src/bytes`（Issue 0008、完了）。`Uint` は `src/bytes`（Issue 0010、完了。実行時フィールド化の差は補足参照） |
 | `Mp4File` / `Mp4FileTime` / `TrackKind` / `SampleFlags` | 時刻・トラック・フラグ | `Mp4FileTime` / `TrackKind` は `src/bytes`（Issue 0008、完了）。`SampleFlags` は後続 Issue（0017 など）、`Mp4File` は `src/boxes`（Issue 0013） |
-| `Error` / `ErrorKind` | 失敗分類 | `src/bytes` の `Mp4Error` / `ErrorKind`（Issue 0005、完了。`Either`/`Uint` 等は後続） |
+| `Error` / `ErrorKind` | 失敗分類 | `src/bytes` の `Mp4Error` / `ErrorKind`（Issue 0005、完了。`Either` は 0009、`Uint` は 0010 で追加済み） |
 | `Decode` / `Encode` / `Result` | codec trait | `src/bytes`（Issue 0006、完了） |
 | `aux::{ChunkAccessor, SampleAccessor, SampleTableAccessor, SampleTableAccessorError}` | sample table 走査 | `src/boxes`（Issue 0009、完了） |
 
@@ -116,7 +116,7 @@ Issue 0007 で確定した対応の補足:
 | --- | --- | --- |
 | `basic_types::Either<T, U>` | `Either[A, B]`（`src/bytes`） | `A`/`B` の 2 variant。上流の `BaseBox` 転送は `pub impl[A : BaseBox, B : BaseBox] BaseBox for @bytes.Either[A, B]`（`src/box`）で行う。`pub extend @bytes.Either with BaseBox` はコンパイルエラー 4059（型とトレイトが別 package）のため使えない。`Either` へのトレイト呼び出しは `@box.BaseBox::box_type(either)` と書く（メソッド記法不可。意図的な差） |
 | `boxes_moov_tree::{StblBox, StsdBox, SttsBox, CttsBox, CslgBox, SdtpBox, StscBox, StszBox, StcoBox, Co64Box, StssBox}` | 同名（`src/boxes`） | 必須子の欠落は上流と同じ "Missing mandatory '...' box in 'stbl' box"（`stco`/`co64` は `"stco' or 'co64"`）。`stco` と `co64` が両方あるときは両方 decode してから `stco` を採用（`Either::A`）。重複 box は最初の 1 個を採用し、以降は `unknown_boxes`。`ctts`/`cslg` は version 0/1、`sdtp` は version 0 のみ |
-| `SampleEntry`（型付き variant 群） | `SampleEntry::{Unknown(UnknownBox)}`（`src/boxes`） | **意図的な一時差**: 0009 では全 entry を raw fallback（`UnknownBox::decode`）として保持し、`box_type`/`children`/`is_unknown_box` は内側へ委譲する。型付き variant（`Avc1`/`Hvc1`/`Vp09`/`Mp4a` 等）は Issue 0010 で追加する |
+| `SampleEntry`（型付き variant 群） | `SampleEntry::{Avc1, Hev1, Hvc1, Vp08, Vp09, Av01, Opus, Mp4a, Flac, Unknown}`（`src/boxes`） | Issue 0010 で型付き variant を追加（詳細は「Issue 0010 で確定した対応の補足」）。`Stpp`/`Wvtt`/`Tx3g` は 0028 まで `Unknown` 分類 |
 | `SttsBox::from_sample_deltas` | `SttsBox::from_sample_deltas(Iter[UInt])`（`src/boxes`） | 連続する同値を run-length 集約する。`sample_count` の u32 合計が溢れると `InvalidData "stts sample_count overflow"` |
 | `SdtpSampleFlags` | `SdtpSampleFlags { value : Byte }`（`src/boxes`） | `from_fields(is_leading, sample_depends_on, sample_is_depended_on, sample_has_redundancy)` / `get` と 4 つの 2-bit accessor。2-bit を超える入力はマスクする |
 | `MinfBox::stbl_box` | `MinfBox::stbl_box : StblBox`（`src/boxes`） | 0008 の一時差を解消し、`stbl` を `minf` の必須子に戻した。`MinfBox::new(media_header?, dinf_box, stbl_box, unknown_boxes)` |
@@ -125,16 +125,32 @@ Issue 0007 で確定した対応の補足:
 | （アクセスの端境界） | `chunk()` は `partition_point(\|x\| x <= index) - 1`、`get_sample_by_timestamp` は上流と同じ binary search | ゼロ件 `stts`/`ctts` が異なる値で並ぶ場合、上流 `binary_search` のどちらの重複キーを返すかは未規定。MoonBit 側は決定的（leftmost）に実装し、この形の入力は oracle 差分から除外して unit test のみで固定する |
 | （対応型なし） | oracle `sample-tables` / `sample-tables-cases` / `sample-tables-fixtures`（`tools/oracle`） | `moov-tree` と同じ正規化 JSON / `--moonbit` 生成。`input` は絶対 path ではなく `name`/`size`/`sha256`、`moov_error` で `moov` 抽出・decode 失敗を表す（リポジトリの再現性ルール）。golden は `src/boxes/sample_table_oracle_*.mbt` と差分比較 |
 
+### Issue 0010 で確定した対応の補足
+
+| 上流 | MoonBit 側 | 備考 |
+| --- | --- | --- |
+| `basic_types::Uint<T, BITS, OFFSET>` | `Uint { value : UInt64, bits : Int, offset : Int }`（`src/bytes`） | コンパイル時ジェネリクスのビット幅・オフセットを実行時フィールドに写像した（意図的な差）。`new` は値が `bits` に収まらない場合 `None`、`from_bits` は格納幅の全ビットから同じ幅・オフセットの部分ビットを切り出す。`get`/`to_bits`/`as_bool` は上流と同じ意味 |
+| `basic_types::NonZeroU16` | `NonZeroU16`（`src/bytes`） | `NonZeroU32` と同じ構成。`NonZeroU16::MIN` は `one()`、decode で 0 は `invalid_input "Expected a non-zero integer, but got 0"` |
+| `FixedPointNumber<u16, u16>` の読み書き | `ReadCursor::read_fixed_16_16_unsigned` / `WriteCursor::write_fixed_16_16_unsigned`（`src/bytes`） | 整数部・小数部とも符号なし u16 として読み書きする。`audio_sample_rate`（u16.u16）と映像 `horizresolution`/`vertresolution` で使用 |
+| `boxes_sample_entry::{VisualSampleEntryFields, AudioSampleEntryFields}` | 同名（`src/boxes`） | 上流と同じ 78/28 バイトレイアウトと reserved/pre_defined フィールド破棄。`compressorname` は生の 32 バイトを保持し、`depth`/`pre_defined` 末尾は定数化しない（値を保持して再エンコードする） |
+| `SampleEntry::{Avc1, Hev1, Hvc1, Vp08, Vp09, Av01, Opus, Mp4a, Flac, Unknown}` | 同名 variant（`src/boxes`） | FourCC で dispatch する `Decode` と variant 委譲の `Encode`/`BaseBox`。`Stpp`/`Wvtt`/`Tx3g` は 0028 まで `Unknown` に分類される（字幕 entry は上流と異なり型付き variant を持たない一時差）。各 entry の必須設定 box（`avcC`/`hvcC`/`vpcC`/`av1C`/`dOps`/`esds`/`dfLa`）の欠落・重複・未知子の扱いは上流と同じ |
+| `SampleEntry::{audio_channel_count, audio_sample_rate, audio_sample_size, video_resolution}` | 同名メソッド（`src/boxes`） | `audio_channel_count` は `channelcount` の下位 8 ビット（上流の `as u8` 相当）、`audio_sample_rate` は整数部のみ（上流 `u16` と同じ切り捨て） |
+| `boxes_sample_entry::{Avc1Box, AvccBox, Hev1Box, Hvc1Box, HvccBox, HvccNalUintArray, Vp08Box, Vp09Box, VpccBox, Av01Box, Av1cBox, OpusBox, DopsBox, Mp4aBox, FlacBox, DflaBox, FlacMetadataBlock}` | 同名（`src/boxes`） | `Hev1Box`/`Hvc1Box` と `Vp08Box`/`Vp09Box` は decode/encode 共有の内部ヘルパー経由。上流の `impl` 内 `const TYPE`/`VERSION`/`CONFIGURATION_VERSION` は `support.mbt` の box_type ヘルパーと各ファイル内定数に対応する |
+| `descriptors::{EsDescriptor, DecoderConfigDescriptor, DecoderSpecificInfo, SlConfigDescriptor}` | 同名（`src/boxes`） | 上流と同じ tag/size（拡張 size バイト対応）の decode/encode。`SlConfigDescriptor` は `predefined==2` のみ受理し、それ以外は `unsupported "Unsupported `SLConfigDescriptor.predefined` value: {n}"`。descriptor の tag 不一致・サイズ超過は上流と同じ `invalid_data` 分類 |
+| `EsdsBox` | 同名（`src/boxes`） | `es : EsDescriptor` のみを持つ FullBox（version 0） |
+| （上流の decode と encode の非対称） | `avcC` profile が 66/77/88 以外で拡張フィールドなし → decode 成功・encode は `invalid_input "Missing 'chroma_format' field in 'avcC' box"` | oracle ケース `avc1_profile100_no_tail` で凍結。`Encode` でも `Mp4Error` を返すため同じ分類で再現する |
+| （対応型なし） | oracle `sample-entries` / `sample-entries-cases` / `sample-entries-fixtures`（`tools/oracle`） | 各 `stsd` entry を上流で再エンコードした `input` と凍結 snapshot を生成する。decode 成功・encode 失敗の組合せは `encode_error_kind`/`encode_error_reason` で表す。golden は `src/boxes/sample_entry_oracle_*.mbt` と差分比較 |
+
 ### `boxes` / `codec_string` / `descriptors`
 
 | 上流 | 概要 | MoonBit 側の対応（予定） |
 | --- | --- | --- |
 | `RootBox::{FtypBox, FreeBox, MdatBox, UnknownBox}` | ルート直下の box | `src/boxes`（Issue 0007、完了。`moof` / `mfra` / `sidx` の variant は 0017。`moov` は 0008 で `RootBox::Moov` として追加済み） |
 | moov tree 群（`MoovBox` 〜 `TrexBox`） | movie/track/media/table box | `src/boxes`（`MoovBox` / `MvhdBox` / `TrakBox` / `TkhdBox` / `EdtsBox` / `ElstBox` / `MdiaBox` / `MdhdBox` / `HdlrBox` / `MinfBox` / `MediaHeader` / `DinfBox` / `DrefBox` / `UrlBox` は Issue 0008、`stbl` 配下の table 群は Issue 0009、いずれも完了。`mvex` / `mehd` / `trex` は 0017） |
-| sample entry 群（`SampleEntry`, `Avc1Box`, `Hvc1Box`, `Hev1Box`, `Vp08Box`, `Vp09Box`, `Av01Box`, `OpusBox`, `Mp4aBox`, `FlacBox`, `StppBox`, `WvttBox`, `Tx3gBox` ほか） | コーデック別 entry | `src/boxes`（`SampleEntry` の `Unknown` fallback のみ Issue 0009、型付き entry は Issue 0010/0028） |
+| sample entry 群（`SampleEntry`, `Avc1Box`, `Hvc1Box`, `Hev1Box`, `Vp08Box`, `Vp09Box`, `Av01Box`, `OpusBox`, `Mp4aBox`, `FlacBox`, `StppBox`, `WvttBox`, `Tx3gBox` ほか） | コーデック別 entry | `src/boxes`（映像・音声の型付き entry は Issue 0010 で完了。字幕系 `StppBox`/`WvttBox`/`Tx3gBox` は Issue 0028。それまでは `SampleEntry::Unknown` に分類される） |
 | fMP4 群（`MoofBox`, `TfhdBox`, `TrunBox`, `SidxBox`, `MfraBox` ほか） | fragment box | `src/boxes`（Issue 0017） |
 | `codec_string::generate_codecs_string` | RFC 6381 codecs 文字列 | `src/boxes`（Issue 0011） |
-| `descriptors::{EsDescriptor, DecoderConfigDescriptor, DecoderSpecificInfo, SlConfigDescriptor}` | MPEG-4 descriptor | `src/boxes`（Issue 0025 で利用） |
+| `descriptors::{EsDescriptor, DecoderConfigDescriptor, DecoderSpecificInfo, SlConfigDescriptor}` | MPEG-4 descriptor | `src/boxes`（Issue 0010 で `esds` とともに実装済み、0025 でも利用） |
 
 ### `demux` / `mux` / `bitstream`
 
@@ -194,6 +210,7 @@ Issue 0007 で確定した対応の補足:
 
 ## 7. 更新履歴
 
+- 2026-10-17: Issue 0010（型付き video/audio sample entry）の対応表を追記。`Uint<T,BITS,OFFSET>` の実行時フィールド化、`NonZeroU16`、u16.u16 unsigned ヘルパー、`Visual`/`AudioSampleEntryFields`、9 つの型付き `SampleEntry` variant と設定 box 群、descriptor/`EsdsBox`、字幕 entry の `Unknown` 継続（0028 までの一時差）、`avcC` decode/encode 非対称、oracle `sample-entries` 系モードを記録。
 - 2026-10-17: Issue 0009（stbl と SampleTableAccessor）の対応表を追記。`Either` と `src/box` の `BaseBox` 転送 impl（`pub extend` 不可の理由）、`SampleEntry` の unknown-only（0010 で型付き化）、`MinfBox::stbl_box` の必須化（0008 の一時差の解消）、非ジェネリック accessor（`AsRef` を移植しない意図的な差）、`SampleTableAccessorError` の対応、未規定の重複キー探索を差分対象外にして leftmost 固定する方針、oracle `sample-tables` 系モードを記録。
 - 2026-10-17: Issue 0008（moov tree と時刻情報）の対応表を追記。`Mp4FileTime` の秒保持、`Utf8String`/`LanguageCode`/`TrackKind`/`NonZeroU32` の対応、`mvex`/`stbl` の一時的な未知 box 扱い（`minf` が `stbl` を必須にしない一時差）、`HdlrBox::name` の生バイト保持、`track_kind()` ヘルパーと 8.8 unsigned ヘルパーを記録。`Mp4File` の追加先を 0013 に修正。
 - 2026-10-17: Issue 0007（ルート box と box tree 走査）の対応表を追記。`Brand` → `FourCC`、`MdatBox` の範囲保持（意図的な差）、`RootBox` の variant 追加予定、独自の box tree API を記録。

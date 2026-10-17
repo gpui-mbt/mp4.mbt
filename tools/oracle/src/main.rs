@@ -20,7 +20,10 @@ use std::path::Path;
 use std::process::ExitCode;
 
 use shiguredo_mp4::aux::{SampleTableAccessor, SampleTableAccessorError};
-use shiguredo_mp4::boxes::{MediaHeader, MoovBox, StblBox};
+use shiguredo_mp4::boxes::{
+    MediaHeader, MoovBox, SampleEntry, StblBox,
+    AudioSampleEntryFields, VisualSampleEntryFields,
+};
 use shiguredo_mp4::demux::{DemuxError, Input, Mp4FileDemuxer, Mp4FileKind, Mp4FileKindDetector};
 use shiguredo_mp4::{
     BaseBox, BoxHeader, BoxSize, Decode, Encode, FixedPointNumber, LanguageCode, TrackKind,
@@ -125,6 +128,28 @@ fn main() -> ExitCode {
             print!("{}", sample_table_moonbit_fixtures());
             ExitCode::SUCCESS
         }
+        Some("sample-entries") if args.len() == 3 => match run_sample_entries(&args[2]) {
+            Ok(json) => {
+                println!("{json}");
+                ExitCode::SUCCESS
+            }
+            Err(e) => {
+                eprintln!("oracle error: {e}");
+                ExitCode::FAILURE
+            }
+        },
+        Some("sample-entries-cases") if args.len() == 2 => {
+            println!("{}", run_sample_entry_cases());
+            ExitCode::SUCCESS
+        }
+        Some("sample-entries-cases") if args.len() == 3 && args[2] == "--moonbit" => {
+            print!("{}", sample_entry_moonbit_cases());
+            ExitCode::SUCCESS
+        }
+        Some("sample-entries-fixtures") if args.len() == 3 && args[2] == "--moonbit" => {
+            print!("{}", sample_entry_moonbit_fixtures());
+            ExitCode::SUCCESS
+        }
         _ => {
             eprintln!("usage: mp4-oracle demux <mp4-file>");
             eprintln!("       mp4-oracle box-headers");
@@ -141,6 +166,10 @@ fn main() -> ExitCode {
             eprintln!("       mp4-oracle sample-tables-cases");
             eprintln!("       mp4-oracle sample-tables-cases --moonbit");
             eprintln!("       mp4-oracle sample-tables-fixtures --moonbit");
+            eprintln!("       mp4-oracle sample-entries <mp4-file>");
+            eprintln!("       mp4-oracle sample-entries-cases");
+            eprintln!("       mp4-oracle sample-entries-cases --moonbit");
+            eprintln!("       mp4-oracle sample-entries-fixtures --moonbit");
             ExitCode::from(2)
         }
     }
@@ -3842,9 +3871,1177 @@ fn sample_table_moonbit_fixtures() -> String {
     out
 }
 
+// === sample entries (issue 0010) ===
+
+/// Renders `Option` numeric fields in the `key=value|none` snapshot form.
+fn opt_num_str<T: std::fmt::Display>(name: &str, value: Option<T>) -> String {
+    match value {
+        Some(v) => format!("{name}={v}"),
+        None => format!("{name}=none"),
+    }
+}
+
+fn fixed_16_16_str(value: &FixedPointNumber<u16, u16>) -> String {
+    format!("{:04x}{:04x}", value.integer, value.fraction)
+}
+
+fn visual_sample_entry_lines(
+    lines: &mut Vec<String>,
+    prefix: &str,
+    v: &VisualSampleEntryFields,
+) {
+    lines.push(format!(
+        "{prefix}.data_reference_index={}",
+        v.data_reference_index.get()
+    ));
+    lines.push(format!("{prefix}.width={}", v.width));
+    lines.push(format!("{prefix}.height={}", v.height));
+    lines.push(format!(
+        "{prefix}.horizresolution={}",
+        fixed_16_16_str(&v.horizresolution)
+    ));
+    lines.push(format!(
+        "{prefix}.vertresolution={}",
+        fixed_16_16_str(&v.vertresolution)
+    ));
+    lines.push(format!("{prefix}.frame_count={}", v.frame_count));
+    lines.push(format!("{prefix}.compressorname={}", hex(&v.compressorname)));
+    lines.push(format!("{prefix}.depth={:04x}", v.depth));
+}
+
+fn audio_sample_entry_lines(
+    lines: &mut Vec<String>,
+    prefix: &str,
+    a: &AudioSampleEntryFields,
+) {
+    lines.push(format!(
+        "{prefix}.data_reference_index={}",
+        a.data_reference_index.get()
+    ));
+    lines.push(format!("{prefix}.channelcount={}", a.channelcount));
+    lines.push(format!("{prefix}.samplesize={}", a.samplesize));
+    lines.push(format!(
+        "{prefix}.samplerate={}",
+        fixed_16_16_str(&a.samplerate)
+    ));
+}
+
+fn byte_list_lines(lines: &mut Vec<String>, name: &str, items: &[Vec<u8>]) {
+    lines.push(format!("{name}.count={}", items.len()));
+    for (i, item) in items.iter().enumerate() {
+        lines.push(format!("{name}[{i}].size={}", item.len()));
+        lines.push(format!("{name}[{i}].hex={}", hex(item)));
+    }
+}
+
+fn unknown_box_lines(lines: &mut Vec<String>, boxes: &[shiguredo_mp4::boxes::UnknownBox]) {
+    lines.push(format!("unknown_boxes.count={}", boxes.len()));
+    for (i, b) in boxes.iter().enumerate() {
+        lines.push(format!("unknown_box[{i}].type={}", b.box_type));
+        lines.push(format!("unknown_box[{i}].payload.size={}", b.payload.len()));
+        lines.push(format!("unknown_box[{i}].payload.hex={}", hex(&b.payload)));
+    }
+}
+
+fn avcc_lines(lines: &mut Vec<String>, prefix: &str, b: &shiguredo_mp4::boxes::AvccBox) {
+    lines.push(format!(
+        "{prefix}.avc_profile_indication={}",
+        b.avc_profile_indication
+    ));
+    lines.push(format!(
+        "{prefix}.profile_compatibility={}",
+        b.profile_compatibility
+    ));
+    lines.push(format!(
+        "{prefix}.avc_level_indication={}",
+        b.avc_level_indication
+    ));
+    lines.push(format!(
+        "{prefix}.length_size_minus_one={}",
+        b.length_size_minus_one.get()
+    ));
+    byte_list_lines(lines, &format!("{prefix}.sps"), &b.sps_list);
+    byte_list_lines(lines, &format!("{prefix}.pps"), &b.pps_list);
+    lines.push(opt_num_str(
+        &format!("{prefix}.chroma_format"),
+        b.chroma_format.map(|u| u.get()),
+    ));
+    lines.push(opt_num_str(
+        &format!("{prefix}.bit_depth_luma_minus8"),
+        b.bit_depth_luma_minus8.map(|u| u.get()),
+    ));
+    lines.push(opt_num_str(
+        &format!("{prefix}.bit_depth_chroma_minus8"),
+        b.bit_depth_chroma_minus8.map(|u| u.get()),
+    ));
+    byte_list_lines(lines, &format!("{prefix}.sps_ext"), &b.sps_ext_list);
+}
+
+fn hvcc_lines(lines: &mut Vec<String>, prefix: &str, b: &shiguredo_mp4::boxes::HvccBox) {
+    lines.push(format!(
+        "{prefix}.general_profile_space={}",
+        b.general_profile_space.get()
+    ));
+    lines.push(format!(
+        "{prefix}.general_tier_flag={}",
+        b.general_tier_flag.get()
+    ));
+    lines.push(format!(
+        "{prefix}.general_profile_idc={}",
+        b.general_profile_idc.get()
+    ));
+    lines.push(format!(
+        "{prefix}.general_profile_compatibility_flags={:08x}",
+        b.general_profile_compatibility_flags
+    ));
+    lines.push(format!(
+        "{prefix}.general_constraint_indicator_flags={:012x}",
+        b.general_constraint_indicator_flags.get()
+    ));
+    lines.push(format!("{prefix}.general_level_idc={}", b.general_level_idc));
+    lines.push(format!(
+        "{prefix}.min_spatial_segmentation_idc={}",
+        b.min_spatial_segmentation_idc.get()
+    ));
+    lines.push(format!(
+        "{prefix}.parallelism_type={}",
+        b.parallelism_type.get()
+    ));
+    lines.push(format!(
+        "{prefix}.chroma_format_idc={}",
+        b.chroma_format_idc.get()
+    ));
+    lines.push(format!(
+        "{prefix}.bit_depth_luma_minus8={}",
+        b.bit_depth_luma_minus8.get()
+    ));
+    lines.push(format!(
+        "{prefix}.bit_depth_chroma_minus8={}",
+        b.bit_depth_chroma_minus8.get()
+    ));
+    lines.push(format!("{prefix}.avg_frame_rate={}", b.avg_frame_rate));
+    lines.push(format!(
+        "{prefix}.constant_frame_rate={}",
+        b.constant_frame_rate.get()
+    ));
+    lines.push(format!(
+        "{prefix}.num_temporal_layers={}",
+        b.num_temporal_layers.get()
+    ));
+    lines.push(format!(
+        "{prefix}.temporal_id_nested={}",
+        b.temporal_id_nested.get()
+    ));
+    lines.push(format!(
+        "{prefix}.length_size_minus_one={}",
+        b.length_size_minus_one.get()
+    ));
+    lines.push(format!("{prefix}.nalu_arrays.count={}", b.nalu_arrays.len()));
+    for (i, array) in b.nalu_arrays.iter().enumerate() {
+        lines.push(format!(
+            "{prefix}.nalu_arrays[{i}].array_completeness={}",
+            array.array_completeness.get()
+        ));
+        lines.push(format!(
+            "{prefix}.nalu_arrays[{i}].nal_unit_type={}",
+            array.nal_unit_type.get()
+        ));
+        byte_list_lines(
+            lines,
+            &format!("{prefix}.nalu_arrays[{i}].nalus"),
+            &array.nalus,
+        );
+    }
+}
+
+fn vpcc_lines(lines: &mut Vec<String>, prefix: &str, b: &shiguredo_mp4::boxes::VpccBox) {
+    lines.push(format!("{prefix}.profile={}", b.profile));
+    lines.push(format!("{prefix}.level={}", b.level));
+    lines.push(format!("{prefix}.bit_depth={}", b.bit_depth.get()));
+    lines.push(format!(
+        "{prefix}.chroma_subsampling={}",
+        b.chroma_subsampling.get()
+    ));
+    lines.push(format!(
+        "{prefix}.video_full_range_flag={}",
+        b.video_full_range_flag.get()
+    ));
+    lines.push(format!("{prefix}.colour_primaries={}", b.colour_primaries));
+    lines.push(format!(
+        "{prefix}.transfer_characteristics={}",
+        b.transfer_characteristics
+    ));
+    lines.push(format!(
+        "{prefix}.matrix_coefficients={}",
+        b.matrix_coefficients
+    ));
+    lines.push(format!(
+        "{prefix}.codec_initialization_data.size={}",
+        b.codec_initialization_data.len()
+    ));
+    lines.push(format!(
+        "{prefix}.codec_initialization_data.hex={}",
+        hex(&b.codec_initialization_data)
+    ));
+}
+
+fn av1c_lines(lines: &mut Vec<String>, prefix: &str, b: &shiguredo_mp4::boxes::Av1cBox) {
+    lines.push(format!("{prefix}.seq_profile={}", b.seq_profile.get()));
+    lines.push(format!("{prefix}.seq_level_idx_0={}", b.seq_level_idx_0.get()));
+    lines.push(format!("{prefix}.seq_tier_0={}", b.seq_tier_0.get()));
+    lines.push(format!("{prefix}.high_bitdepth={}", b.high_bitdepth.get()));
+    lines.push(format!("{prefix}.twelve_bit={}", b.twelve_bit.get()));
+    lines.push(format!("{prefix}.monochrome={}", b.monochrome.get()));
+    lines.push(format!(
+        "{prefix}.chroma_subsampling_x={}",
+        b.chroma_subsampling_x.get()
+    ));
+    lines.push(format!(
+        "{prefix}.chroma_subsampling_y={}",
+        b.chroma_subsampling_y.get()
+    ));
+    lines.push(format!(
+        "{prefix}.chroma_sample_position={}",
+        b.chroma_sample_position.get()
+    ));
+    lines.push(opt_num_str(
+        &format!("{prefix}.initial_presentation_delay_minus_one"),
+        b.initial_presentation_delay_minus_one.map(|u| u.get()),
+    ));
+    lines.push(format!("{prefix}.config_obus.size={}", b.config_obus.len()));
+    lines.push(format!("{prefix}.config_obus.hex={}", hex(&b.config_obus)));
+}
+
+fn dops_lines(lines: &mut Vec<String>, prefix: &str, b: &shiguredo_mp4::boxes::DopsBox) {
+    lines.push(format!(
+        "{prefix}.output_channel_count={}",
+        b.output_channel_count
+    ));
+    lines.push(format!("{prefix}.pre_skip={}", b.pre_skip));
+    lines.push(format!("{prefix}.input_sample_rate={}", b.input_sample_rate));
+    lines.push(format!("{prefix}.output_gain={}", b.output_gain));
+}
+
+fn esds_lines(lines: &mut Vec<String>, prefix: &str, b: &shiguredo_mp4::boxes::EsdsBox) {
+    let es = &b.es;
+    lines.push(format!("{prefix}.es_id={}", es.es_id));
+    lines.push(format!(
+        "{prefix}.stream_priority={}",
+        es.stream_priority.get()
+    ));
+    lines.push(opt_num_str(
+        &format!("{prefix}.depends_on_es_id"),
+        es.depends_on_es_id,
+    ));
+    lines.push(format!(
+        "{prefix}.url_string={}",
+        match &es.url_string {
+            Some(url) => json_string_to(url),
+            None => "none".to_string(),
+        }
+    ));
+    lines.push(opt_num_str(&format!("{prefix}.ocr_es_id"), es.ocr_es_id));
+    let d = &es.dec_config_descr;
+    lines.push(format!(
+        "{prefix}.dec_config.object_type_indication={:02x}",
+        d.object_type_indication
+    ));
+    lines.push(format!(
+        "{prefix}.dec_config.stream_type={}",
+        d.stream_type.get()
+    ));
+    lines.push(format!("{prefix}.dec_config.up_stream={}", d.up_stream.get()));
+    lines.push(format!(
+        "{prefix}.dec_config.buffer_size_db={}",
+        d.buffer_size_db.get()
+    ));
+    lines.push(format!("{prefix}.dec_config.max_bitrate={}", d.max_bitrate));
+    lines.push(format!("{prefix}.dec_config.avg_bitrate={}", d.avg_bitrate));
+    match &d.dec_specific_info {
+        Some(info) => {
+            lines.push(format!(
+                "{prefix}.dec_specific_info.size={}",
+                info.payload.len()
+            ));
+            lines.push(format!(
+                "{prefix}.dec_specific_info.hex={}",
+                hex(&info.payload)
+            ));
+        }
+        None => lines.push(format!("{prefix}.dec_specific_info=none")),
+    }
+}
+
+fn dfla_lines(lines: &mut Vec<String>, prefix: &str, b: &shiguredo_mp4::boxes::DflaBox) {
+    lines.push(format!(
+        "{prefix}.metadata_blocks.count={}",
+        b.metadata_blocks.len()
+    ));
+    for (i, block) in b.metadata_blocks.iter().enumerate() {
+        lines.push(format!(
+            "{prefix}.metadata_blocks[{i}].last_metadata_block_flag={}",
+            block.last_metadata_block_flag.get()
+        ));
+        lines.push(format!(
+            "{prefix}.metadata_blocks[{i}].block_type={}",
+            block.block_type.get()
+        ));
+        lines.push(format!(
+            "{prefix}.metadata_blocks[{i}].block_data.size={}",
+            block.block_data.len()
+        ));
+        lines.push(format!(
+            "{prefix}.metadata_blocks[{i}].block_data.hex={}",
+            hex(&block.block_data)
+        ));
+    }
+}
+
+/// Frozen per-entry snapshot shared by the JSON modes and the generated
+/// MoonBit case/fixture files.
+fn sample_entry_snapshot(entry: &SampleEntry) -> Vec<String> {
+    let mut lines = Vec::new();
+    let variant = match entry {
+        SampleEntry::Avc1(_) => "avc1",
+        SampleEntry::Hev1(_) => "hev1",
+        SampleEntry::Hvc1(_) => "hvc1",
+        SampleEntry::Vp08(_) => "vp08",
+        SampleEntry::Vp09(_) => "vp09",
+        SampleEntry::Av01(_) => "av01",
+        SampleEntry::Opus(_) => "Opus",
+        SampleEntry::Mp4a(_) => "mp4a",
+        SampleEntry::Flac(_) => "fLaC",
+        SampleEntry::Stpp(_) => "stpp",
+        SampleEntry::Wvtt(_) => "wvtt",
+        SampleEntry::Tx3g(_) => "tx3g",
+        SampleEntry::Unknown(_) => "unknown",
+    };
+    lines.push(format!("variant={variant}"));
+    lines.push(format!("box_type={}", entry.box_type()));
+    lines.push(format!("is_unknown={}", bool_str(entry.is_unknown_box())));
+    lines.push(opt_num_str(
+        "audio_channel_count",
+        entry.audio_channel_count(),
+    ));
+    lines.push(opt_num_str("audio_sample_rate", entry.audio_sample_rate()));
+    lines.push(opt_num_str("audio_sample_size", entry.audio_sample_size()));
+    lines.push(format!(
+        "video_resolution={}",
+        match entry.video_resolution() {
+            Some((w, h)) => format!("{w}x{h}"),
+            None => "none".to_string(),
+        }
+    ));
+    match entry {
+        SampleEntry::Avc1(b) => {
+            visual_sample_entry_lines(&mut lines, "visual", &b.visual);
+            avcc_lines(&mut lines, "avcC", &b.avcc_box);
+            unknown_box_lines(&mut lines, &b.unknown_boxes);
+        }
+        SampleEntry::Hev1(b) => {
+            visual_sample_entry_lines(&mut lines, "visual", &b.visual);
+            hvcc_lines(&mut lines, "hvcC", &b.hvcc_box);
+            unknown_box_lines(&mut lines, &b.unknown_boxes);
+        }
+        SampleEntry::Hvc1(b) => {
+            visual_sample_entry_lines(&mut lines, "visual", &b.visual);
+            hvcc_lines(&mut lines, "hvcC", &b.hvcc_box);
+            unknown_box_lines(&mut lines, &b.unknown_boxes);
+        }
+        SampleEntry::Vp08(b) => {
+            visual_sample_entry_lines(&mut lines, "visual", &b.visual);
+            vpcc_lines(&mut lines, "vpcC", &b.vpcc_box);
+            unknown_box_lines(&mut lines, &b.unknown_boxes);
+        }
+        SampleEntry::Vp09(b) => {
+            visual_sample_entry_lines(&mut lines, "visual", &b.visual);
+            vpcc_lines(&mut lines, "vpcC", &b.vpcc_box);
+            unknown_box_lines(&mut lines, &b.unknown_boxes);
+        }
+        SampleEntry::Av01(b) => {
+            visual_sample_entry_lines(&mut lines, "visual", &b.visual);
+            av1c_lines(&mut lines, "av1C", &b.av1c_box);
+            unknown_box_lines(&mut lines, &b.unknown_boxes);
+        }
+        SampleEntry::Opus(b) => {
+            audio_sample_entry_lines(&mut lines, "audio", &b.audio);
+            dops_lines(&mut lines, "dOps", &b.dops_box);
+            unknown_box_lines(&mut lines, &b.unknown_boxes);
+        }
+        SampleEntry::Mp4a(b) => {
+            audio_sample_entry_lines(&mut lines, "audio", &b.audio);
+            esds_lines(&mut lines, "esds", &b.esds_box);
+            unknown_box_lines(&mut lines, &b.unknown_boxes);
+        }
+        SampleEntry::Flac(b) => {
+            audio_sample_entry_lines(&mut lines, "audio", &b.audio);
+            dfla_lines(&mut lines, "dfLa", &b.dfla_box);
+            unknown_box_lines(&mut lines, &b.unknown_boxes);
+        }
+        SampleEntry::Unknown(b) => {
+            lines.push(format!(
+                "unknown.size_kind={}",
+                match b.box_size {
+                    BoxSize::U32(_) => "u32",
+                    BoxSize::U64(_) => "u64",
+                }
+            ));
+            lines.push(format!("unknown.payload.size={}", b.payload.len()));
+            lines.push(format!("unknown.payload.hex={}", hex(&b.payload)));
+        }
+        _ => {}
+    }
+    let children: Vec<String> = entry
+        .children()
+        .map(|c| format!("{}", c.box_type()))
+        .collect();
+    lines.push(format!("children.count={}", children.len()));
+    for (i, ty) in children.iter().enumerate() {
+        lines.push(format!("children[{i}].type={ty}"));
+    }
+    lines
+}
+
+/// One decoded sample-entry observation: the frozen snapshot plus either the
+/// re-encoded bytes or the encode/decode error.
+enum SampleEntryOutcome {
+    Ok { snapshot: Vec<String>, encoded: Vec<u8> },
+    EncodeErr {
+        snapshot: Vec<String>,
+        kind: &'static str,
+        reason: String,
+    },
+    DecodeErr { kind: &'static str, reason: String },
+}
+
+fn sample_entry_outcome(input: &[u8]) -> SampleEntryOutcome {
+    match SampleEntry::decode(input) {
+        Err(error) => SampleEntryOutcome::DecodeErr {
+            kind: error_kind_str(error.kind),
+            reason: error.reason,
+        },
+        Ok((entry, _)) => {
+            let snapshot = sample_entry_snapshot(&entry);
+            match entry.encode_to_vec() {
+                Ok(encoded) => SampleEntryOutcome::Ok { snapshot, encoded },
+                Err(error) => SampleEntryOutcome::EncodeErr {
+                    snapshot,
+                    kind: error_kind_str(error.kind),
+                    reason: error.reason,
+                },
+            }
+        }
+    }
+}
+
+/// Fixed bare-sample-entry case table shared with the MoonBit differential
+/// test (`src/boxes/sample_entry_oracle_test.mbt`).
+///
+/// Changing this table changes the generated MoonBit case file; regenerate it
+/// with:
+///   (cd tools/oracle && cargo run -- sample-entries-cases --moonbit) \
+///     > src/boxes/sample_entry_oracle_cases_test.mbt
+fn sample_entry_cases() -> Vec<(&'static str, Vec<u8>)> {
+    fn raw_box(box_type: &[u8; 4], payload: &[u8]) -> Vec<u8> {
+        let mut out = Vec::with_capacity(8 + payload.len());
+        out.extend_from_slice(&((8 + payload.len()) as u32).to_be_bytes());
+        out.extend_from_slice(box_type);
+        out.extend_from_slice(payload);
+        out
+    }
+
+    fn full_box(box_type: &[u8; 4], version: u8, flags: u32, body: &[u8]) -> Vec<u8> {
+        let mut payload = Vec::with_capacity(4 + body.len());
+        payload.push(version);
+        payload.extend_from_slice(&(flags & 0x00FF_FFFF).to_be_bytes()[1..]);
+        payload.extend_from_slice(body);
+        raw_box(box_type, &payload)
+    }
+
+    fn entry(box_type: &[u8; 4], fields: &[u8], children: &[Vec<u8>]) -> Vec<u8> {
+        let mut payload = fields.to_vec();
+        for child in children {
+            payload.extend_from_slice(child);
+        }
+        raw_box(box_type, &payload)
+    }
+
+    /// 78-byte ISO visual sample entry fields.
+    fn visual_fields(dref: u16, width: u16, height: u16) -> Vec<u8> {
+        let mut v = Vec::with_capacity(78);
+        v.extend_from_slice(&[0; 6]);
+        v.extend_from_slice(&dref.to_be_bytes());
+        v.extend_from_slice(&[0; 16]);
+        v.extend_from_slice(&width.to_be_bytes());
+        v.extend_from_slice(&height.to_be_bytes());
+        v.extend_from_slice(&0x0048_0000u32.to_be_bytes());
+        v.extend_from_slice(&0x0048_0000u32.to_be_bytes());
+        v.extend_from_slice(&[0; 4]);
+        v.extend_from_slice(&1u16.to_be_bytes());
+        v.extend_from_slice(&[0; 32]);
+        v.extend_from_slice(&0x0018u16.to_be_bytes());
+        v.extend_from_slice(&0xFFFFu16.to_be_bytes());
+        v
+    }
+
+    /// 28-byte ISO audio sample entry fields (`samplerate` as u16.u16).
+    fn audio_fields(dref: u16, channels: u16, sample_size: u16, rate: u32) -> Vec<u8> {
+        let mut v = Vec::with_capacity(28);
+        v.extend_from_slice(&[0; 6]);
+        v.extend_from_slice(&dref.to_be_bytes());
+        v.extend_from_slice(&[0; 8]);
+        v.extend_from_slice(&channels.to_be_bytes());
+        v.extend_from_slice(&sample_size.to_be_bytes());
+        v.extend_from_slice(&[0; 4]);
+        v.extend_from_slice(&rate.to_be_bytes());
+        v
+    }
+
+    fn avcc(profile: u8, with_tail: bool) -> Vec<u8> {
+        let sps: &[u8] = &[0x67, 0x64, 0x00, 0x1e, 0xac, 0xd9, 0x40, 0xa0, 0x2f];
+        let pps: &[u8] = &[0x68, 0xee, 0x06, 0xe2];
+        let mut body = vec![1, profile, 0x00, 0x1e, 0xff, 0xe1];
+        body.extend_from_slice(&(sps.len() as u16).to_be_bytes());
+        body.extend_from_slice(sps);
+        body.push(1);
+        body.extend_from_slice(&(pps.len() as u16).to_be_bytes());
+        body.extend_from_slice(pps);
+        if with_tail {
+            body.extend_from_slice(&[0xfd, 0xf8, 0xf8, 0x00]);
+        }
+        raw_box(b"avcC", &body)
+    }
+
+    /// Minimal valid `hvcC` (empty NALU array list).
+    fn hvcc() -> Vec<u8> {
+        raw_box(
+            b"hvcC",
+            &[
+                0x01, 0x01, 0x60, 0x00, 0x00, 0x00, 0x90, 0x00, 0x00, 0x00, 0x00, 0x00, 0x78,
+                0xf0, 0x00, 0xfc, 0xfc, 0xf8, 0xf8, 0x00, 0x00, 0x03, 0x00,
+            ],
+        )
+    }
+
+    fn vpcc() -> Vec<u8> {
+        full_box(b"vpcC", 1, 0, &[0, 10, 0x80, 1, 1, 1, 0, 0])
+    }
+
+    fn av1c() -> Vec<u8> {
+        raw_box(b"av1C", &[0x81, 0x00, 0x00, 0x00])
+    }
+
+    fn dops() -> Vec<u8> {
+        raw_box(b"dOps", &[0, 2, 0x01, 0x38, 0, 0, 0xbb, 0x80, 0, 0, 0])
+    }
+
+    /// `esds` v0 with a minimal AAC ES descriptor chain.
+    ///
+    /// `DecoderConfigDescriptor`'s declared size includes the nested
+    /// `DecSpecificInfo` (13 fixed + 4 = 17 bytes).
+    fn esds() -> Vec<u8> {
+        full_box(
+            b"esds",
+            0,
+            0,
+            &[
+                0x03, 0x19, 0x00, 0x01, 0x00, // ES_Descr: es_id=1, flags=0
+                0x04, 0x11, 0x40, 0x15, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x05, 0x02, 0x11, 0x90, // DecSpecificInfo
+                0x06, 0x01, 0x02, // SLConfigDescr predefined=2
+            ],
+        )
+    }
+
+    /// `esds` exercising all three optional ES flags.
+    fn esds_all_flags() -> Vec<u8> {
+        full_box(
+            b"esds",
+            0,
+            0,
+            &[
+                0x03, 0x1f, 0x00, 0x02, 0xe5, // es_id=2, depends+url+ocr, priority=5
+                0x00, 0x07, // depends_on_es_id=7
+                0x01, 0x78, // url="x"
+                0x00, 0x09, // ocr_es_id=9
+                0x04, 0x11, 0x40, 0x15, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x05, 0x02, 0x11, 0x90, 0x06, 0x01, 0x02,
+            ],
+        )
+    }
+
+    fn dfla(blocks: &[Vec<u8>]) -> Vec<u8> {
+        let mut body = Vec::new();
+        for b in blocks {
+            body.extend_from_slice(b);
+        }
+        full_box(b"dfLa", 0, 0, &body)
+    }
+
+    fn flac_block(last: bool, block_type: u8, data: &[u8]) -> Vec<u8> {
+        let mut v = vec![(if last { 0x80 } else { 0x00 }) | block_type];
+        v.extend_from_slice(&(data.len() as u32).to_be_bytes()[1..]);
+        v.extend_from_slice(data);
+        v
+    }
+
+    let streaminfo = flac_block(false, 0, &[0xAB; 34]);
+    let padding_last = flac_block(true, 1, &[]);
+
+    let visual = visual_fields(1, 640, 480);
+    let audio = audio_fields(1, 2, 16, 48000 << 16);
+
+    let mut cases: Vec<(&'static str, Vec<u8>)> = Vec::new();
+
+    // --- valid round-trips ---
+    cases.push((
+        "avc1_basic",
+        entry(b"avc1", &visual, &[avcc(100, true)]),
+    ));
+    cases.push((
+        "avc1_profile66_no_tail",
+        entry(b"avc1", &visual, &[avcc(66, false)]),
+    ));
+    cases.push((
+        "avc1_unknown_children_ordered",
+        entry(
+            b"avc1",
+            &visual,
+            &[
+                raw_box(b"pasp", &[0, 0, 0, 1, 0, 0, 0, 1]),
+                avcc(66, false),
+                raw_box(b"btrt", &[0, 0, 0, 0]),
+            ],
+        ),
+    ));
+    cases.push((
+        "avc1_duplicate_avcc_second_unknown",
+        entry(b"avc1", &visual, &[avcc(66, false), avcc(100, true)]),
+    ));
+    cases.push((
+        "hev1_basic",
+        entry(b"hev1", &visual, &[hvcc()]),
+    ));
+    cases.push((
+        "hvc1_basic",
+        entry(b"hvc1", &visual, &[hvcc()]),
+    ));
+    cases.push(("vp08_basic", entry(b"vp08", &visual, &[vpcc()])));
+    cases.push(("vp09_basic", entry(b"vp09", &visual, &[vpcc()])));
+    cases.push(("av01_basic", entry(b"av01", &visual, &[av1c()])));
+    cases.push(("opus_basic", entry(b"Opus", &audio, &[dops()])));
+    cases.push(("mp4a_basic", entry(b"mp4a", &audio, &[esds()])));
+    cases.push((
+        "mp4a_esds_all_flags",
+        entry(b"mp4a", &audio, &[esds_all_flags()]),
+    ));
+    cases.push((
+        "flac_basic",
+        entry(
+            b"fLaC",
+            &audio,
+            &[dfla(&[streaminfo.clone(), padding_last.clone()])],
+        ),
+    ));
+    cases.push(("unknown_zzzz", raw_box(b"zzzz", &[0xaa, 0xbb])));
+
+    // --- decode succeeds, re-encode fails (upstream behaviour) ---
+    cases.push((
+        "avc1_profile100_no_tail",
+        entry(b"avc1", &visual, &[avcc(100, false)]),
+    ));
+
+    // --- decode errors ---
+    cases.push(("avc1_missing_avcc", entry(b"avc1", &visual, &[])));
+    cases.push(("hev1_missing_hvcc", entry(b"hev1", &visual, &[])));
+    cases.push(("vp09_missing_vpcc", entry(b"vp09", &visual, &[])));
+    cases.push(("av01_missing_av1c", entry(b"av01", &visual, &[])));
+    cases.push(("opus_missing_dops", entry(b"Opus", &audio, &[])));
+    cases.push(("mp4a_missing_esds", entry(b"mp4a", &audio, &[])));
+    cases.push(("flac_missing_dfla", entry(b"fLaC", &audio, &[])));
+    cases.push(("avc1_truncated_fields", {
+        let mut v = entry(b"avc1", &visual[..40], &[]);
+        let len = v.len() as u32;
+        v[..4].copy_from_slice(&len.to_be_bytes());
+        v
+    }));
+    cases.push(("avc1_dref_zero", {
+        let mut fields = visual.clone();
+        fields[6] = 0;
+        fields[7] = 0;
+        entry(b"avc1", &fields, &[avcc(66, false)])
+    }));
+    cases.push(("avcc_bad_version", {
+        let mut c = avcc(66, false);
+        c[8] = 2;
+        entry(b"avc1", &visual, &[c])
+    }));
+    cases.push(("hvcc_bad_version", {
+        let mut c = hvcc();
+        c[8] = 2;
+        entry(b"hev1", &visual, &[c])
+    }));
+    cases.push(("vpcc_bad_version", {
+        let mut c = vpcc();
+        c[8] = 2;
+        entry(b"vp09", &visual, &[c])
+    }));
+    cases.push(("av1c_bad_marker", {
+        entry(b"av01", &visual, &[raw_box(b"av1C", &[0x01, 0, 0, 0])])
+    }));
+    cases.push(("av1c_bad_version", {
+        entry(b"av01", &visual, &[raw_box(b"av1C", &[0x82, 0, 0, 0])])
+    }));
+    cases.push(("dops_bad_version", {
+        let mut c = dops();
+        c[8] = 1;
+        entry(b"Opus", &audio, &[c])
+    }));
+    cases.push(("dops_bad_mapping_family", {
+        let mut c = dops();
+        *c.last_mut().unwrap() = 1;
+        entry(b"Opus", &audio, &[c])
+    }));
+    cases.push(("dfla_bad_version", {
+        let mut c = dfla(&[streaminfo.clone(), padding_last.clone()]);
+        c[8] = 1;
+        entry(b"fLaC", &audio, &[c])
+    }));
+    cases.push(("dfla_empty", entry(b"fLaC", &audio, &[dfla(&[])])));
+    cases.push(("dfla_first_not_streaminfo", {
+        entry(b"fLaC", &audio, &[dfla(&[padding_last.clone()])])
+    }));
+    cases.push(("dfla_trailing_after_last", {
+        entry(
+            b"fLaC",
+            &audio,
+            &[dfla(&[
+                streaminfo.clone(),
+                padding_last.clone(),
+                vec![0xaa],
+            ])],
+        )
+    }));
+    cases.push(("esds_sl_predefined_bad", {
+        let mut c = esds();
+        *c.last_mut().unwrap() = 1;
+        entry(b"mp4a", &audio, &[c])
+    }));
+    cases.push(("avcc_sps_too_large", {
+        let mut c = avcc(66, false);
+        // declared SPS length exceeds the remaining payload
+        c[14] = 0;
+        c[15] = 0x7f;
+        entry(b"avc1", &visual, &[c])
+    }));
+    cases.push(("hvcc_nalu_too_large", {
+        let mut c = hvcc();
+        // one array with a NALU whose declared length exceeds the payload
+        c[30] = 1;
+        c.extend_from_slice(&[0xa0, 0x00, 0x01, 0x7f, 0xff, 0xaa]);
+        let len = c.len() as u32;
+        c[..4].copy_from_slice(&len.to_be_bytes());
+        entry(b"hev1", &visual, &[c])
+    }));
+
+    cases
+}
+
+/// Runs the fixed sample-entry case table and emits the normalised JSON.
+fn run_sample_entry_cases() -> String {
+    let cases = sample_entry_cases();
+    let mut items: Vec<String> = Vec::new();
+    for (name, input) in &cases {
+        let mut entry = format!("{{\"name\": \"{name}\", \"input\": \"{}\"", hex(input));
+        match sample_entry_outcome(input) {
+            SampleEntryOutcome::Ok { snapshot, encoded } => {
+                let _ = write!(
+                    entry,
+                    ", \"ok\": true, \"snapshot\": {}, \"encoded\": \"{}\"",
+                    snapshot_json(&snapshot),
+                    hex(&encoded)
+                );
+            }
+            SampleEntryOutcome::EncodeErr {
+                snapshot,
+                kind,
+                reason,
+            } => {
+                let _ = write!(
+                    entry,
+                    ", \"ok\": true, \"snapshot\": {}, \"encoded\": null, \"encode_error_kind\": \"{kind}\", \"encode_error_reason\": {}",
+                    snapshot_json(&snapshot),
+                    json_string_to(&reason)
+                );
+            }
+            SampleEntryOutcome::DecodeErr { kind, reason } => {
+                let _ = write!(
+                    entry,
+                    ", \"ok\": false, \"error_kind\": \"{kind}\", \"reason\": {}",
+                    json_string_to(&reason)
+                );
+            }
+        }
+        entry.push('}');
+        items.push(entry);
+    }
+    format!(
+        "{{\"schema\": {SCHEMA_VERSION}, \"upstream_sha\": \"{UPSTREAM_SHA}\", \"cases\": [{}]}}",
+        items.join(", ")
+    )
+}
+
+/// Emits the MoonBit case-table file consumed by
+/// `src/boxes/sample_entry_oracle_test.mbt`.
+fn sample_entry_moonbit_cases() -> String {
+    let mut out = String::new();
+    let _ = writeln!(
+        out,
+        "// Generated by `cargo run -- sample-entries-cases --moonbit` (tools/oracle)."
+    );
+    let _ = writeln!(
+        out,
+        "// Source of truth: tools/oracle/src/main.rs (sample_entry_cases)."
+    );
+    let _ = writeln!(out, "// Upstream: shiguredo/mp4-rs@{UPSTREAM_SHA}");
+    let _ = writeln!(
+        out,
+        "// DO NOT EDIT MANUALLY. Regenerate (canonical formatting is part of the file):"
+    );
+    let _ = writeln!(
+        out,
+        "//   (cd tools/oracle && cargo run -- sample-entries-cases --moonbit) \\"
+    );
+    let _ = writeln!(
+        out,
+        "//     > src/boxes/sample_entry_oracle_cases_test.mbt"
+    );
+    let _ = writeln!(out, "//   moon fmt");
+    let _ = writeln!(out);
+    let _ = writeln!(out, "///|");
+    let _ = writeln!(
+        out,
+        "/// `tools/oracle` の `sample-entries-cases` が返すケース表（生成物）。"
+    );
+    let _ = writeln!(out, "///");
+    let _ = writeln!(
+        out,
+        "/// 型は `src/boxes/sample_entry_oracle_test.mbt` で定義する。手で編集しない。"
+    );
+    let _ = writeln!(
+        out,
+        "let oracle_sample_entry_cases : Array[OracleSampleEntryCase] = ["
+    );
+    for (name, input) in &sample_entry_cases() {
+        let _ = writeln!(out, "  {{");
+        let _ = writeln!(out, "    name: \"{name}\",");
+        let _ = writeln!(out, "    input: {},", moonbit_bytes(input));
+        match sample_entry_outcome(input) {
+            SampleEntryOutcome::Ok { snapshot, encoded } => {
+                let _ = writeln!(out, "    ok: true,");
+                write_moonbit_snapshot(&mut out, &snapshot, 4);
+                let _ = writeln!(out, "    error_kind: \"\",");
+                let _ = writeln!(out, "    reason: \"\",");
+                let _ = writeln!(out, "    encoded: {},", moonbit_bytes(&encoded));
+                let _ = writeln!(out, "    encode_error_kind: \"\",");
+                let _ = writeln!(out, "    encode_error_reason: \"\",");
+            }
+            SampleEntryOutcome::EncodeErr {
+                snapshot,
+                kind,
+                reason,
+            } => {
+                let _ = writeln!(out, "    ok: true,");
+                write_moonbit_snapshot(&mut out, &snapshot, 4);
+                let _ = writeln!(out, "    error_kind: \"\",");
+                let _ = writeln!(out, "    reason: \"\",");
+                let _ = writeln!(out, "    encoded: b\"\",");
+                let _ = writeln!(out, "    encode_error_kind: \"{kind}\",");
+                let _ = writeln!(
+                    out,
+                    "    encode_error_reason: {},",
+                    moonbit_string(&reason)
+                );
+            }
+            SampleEntryOutcome::DecodeErr { kind, reason } => {
+                let _ = writeln!(out, "    ok: false,");
+                let _ = writeln!(out, "    snapshot: [],");
+                let _ = writeln!(out, "    error_kind: \"{kind}\",");
+                let _ = writeln!(out, "    reason: {},", moonbit_string(&reason));
+                let _ = writeln!(out, "    encoded: b\"\",");
+                let _ = writeln!(out, "    encode_error_kind: \"\",");
+                let _ = writeln!(out, "    encode_error_reason: \"\",");
+            }
+        }
+        let _ = writeln!(out, "  }},");
+    }
+    let _ = writeln!(out, "]");
+    out
+}
+
+/// Extracts every track's `stsd` entries from every fixture and re-encodes
+/// each entry with upstream (panics on failure: generation must not silently
+/// emit stale data).
+fn sample_entry_fixture_entries() -> Vec<(&'static str, usize, usize, Vec<u8>)> {
+    let mut out = Vec::new();
+    for (name, data) in SAMPLE_TABLE_FIXTURES {
+        let moov_bytes =
+            extract_top_level_box(data, b"moov").unwrap_or_else(|(kind, reason)| {
+                panic!("{name}: top-level moov extraction failed: {kind}: {reason}")
+            });
+        let (moov, _) = MoovBox::decode(&moov_bytes).unwrap_or_else(|e| {
+            panic!(
+                "{name}: moov decode failed: {}: {}",
+                error_kind_str(e.kind),
+                e.reason
+            )
+        });
+        for (track_index, trak) in moov.trak_boxes.iter().enumerate() {
+            for (entry_index, entry) in trak
+                .mdia_box
+                .minf_box
+                .stbl_box
+                .stsd_box
+                .entries
+                .iter()
+                .enumerate()
+            {
+                let encoded = entry.encode_to_vec().unwrap_or_else(|e| {
+                    panic!(
+                        "{name} track {track_index} entry {entry_index}: encode failed: {}: {}",
+                        error_kind_str(e.kind),
+                        e.reason
+                    )
+                });
+                out.push((*name, track_index, entry_index, encoded));
+            }
+        }
+    }
+    out
+}
+
+/// Emits the fixture differential data consumed by
+/// `src/boxes/sample_entry_oracle_test.mbt`.
+fn sample_entry_moonbit_fixtures() -> String {
+    let fixtures = sample_entry_fixture_entries();
+    let mut out = String::new();
+    let _ = writeln!(
+        out,
+        "// Generated by `cargo run -- sample-entries-fixtures --moonbit` (tools/oracle)."
+    );
+    let _ = writeln!(
+        out,
+        "// Source of truth: tools/oracle/src/main.rs (SAMPLE_TABLE_FIXTURES)."
+    );
+    let _ = writeln!(
+        out,
+        "// Fixtures (per-entry `stsd` sample entries re-encoded by upstream):"
+    );
+    for (name, track_index, entry_index, entry) in &fixtures {
+        let _ = writeln!(
+            out,
+            "//   {name} track {track_index} entry {entry_index}: {} bytes, sha256 {}",
+            entry.len(),
+            sha256_hex(entry)
+        );
+    }
+    let _ = writeln!(out, "// Upstream: shiguredo/mp4-rs@{UPSTREAM_SHA}");
+    let _ = writeln!(
+        out,
+        "// DO NOT EDIT MANUALLY. Regenerate (canonical formatting is part of the file):"
+    );
+    let _ = writeln!(
+        out,
+        "//   (cd tools/oracle && cargo run -- sample-entries-fixtures --moonbit) \\"
+    );
+    let _ = writeln!(
+        out,
+        "//     > src/boxes/sample_entry_oracle_fixtures_test.mbt"
+    );
+    let _ = writeln!(out, "//   moon fmt");
+    let _ = writeln!(out);
+    let _ = writeln!(out, "///|");
+    let _ = writeln!(
+        out,
+        "/// `tools/oracle` の `sample-entries-fixtures` が返す fixture 走査（生成物）。"
+    );
+    let _ = writeln!(out, "///");
+    let _ = writeln!(
+        out,
+        "/// 型は `src/boxes/sample_entry_oracle_test.mbt` で定義する。手で編集しない。"
+    );
+    let _ = writeln!(
+        out,
+        "let oracle_sample_entry_fixtures : Array[OracleSampleEntryFixture] = ["
+    );
+    for (name, track_index, entry_index, entry_bytes) in &fixtures {
+        let snapshot = match sample_entry_outcome(entry_bytes) {
+            SampleEntryOutcome::Ok { snapshot, .. } => snapshot,
+            SampleEntryOutcome::EncodeErr { kind, reason, .. }
+            | SampleEntryOutcome::DecodeErr { kind, reason } => panic!(
+                "{name} track {track_index} entry {entry_index}: re-decode failed: {kind}: {reason}"
+            ),
+        };
+        let _ = writeln!(out, "  {{");
+        let _ = writeln!(out, "    name: \"{name}\",");
+        let _ = writeln!(out, "    track_index: {track_index},");
+        let _ = writeln!(out, "    entry_index: {entry_index},");
+        let _ = writeln!(out, "    input: {},", moonbit_bytes(entry_bytes));
+        write_moonbit_snapshot(&mut out, &snapshot, 4);
+        let _ = writeln!(out, "  }},");
+    }
+    let _ = writeln!(out, "]");
+    out
+}
+
+/// `sample-entries <mp4-file>` — per-track `stsd` entry snapshots.
+fn run_sample_entries(path: &str) -> Result<String, String> {
+    let data = fs::read(path).map_err(|e| format!("failed to read {path}: {e}"))?;
+    let name = Path::new(path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("unknown")
+        .to_owned();
+
+    let mut input = String::from("{");
+    input.push_str("\"name\": ");
+    json_string(&name, &mut input);
+    let _ = write!(input, ", \"size\": \"{}\", \"sha256\": ", data.len());
+    json_string(&sha256_hex(&data), &mut input);
+    input.push('}');
+
+    let (tracks, moov_error) = match extract_top_level_box(&data, b"moov") {
+        Ok(moov) => match MoovBox::decode(&moov) {
+            Ok((moov_box, _)) => (sample_entries_json_for_moov(&moov_box), String::from("null")),
+            Err(error) => (
+                String::from("[]"),
+                format!(
+                    "{{\"error_kind\": \"{}\", \"reason\": {}}}",
+                    error_kind_str(error.kind),
+                    json_string_to(&error.reason)
+                ),
+            ),
+        },
+        Err((kind, reason)) => (
+            String::from("[]"),
+            format!(
+                "{{\"error_kind\": \"{kind}\", \"reason\": {}}}",
+                json_string_to(&reason)
+            ),
+        ),
+    };
+
+    let parts = [
+        format!("  \"schema_version\": {SCHEMA_VERSION}"),
+        format!("  \"upstream_sha\": \"{UPSTREAM_SHA}\""),
+        format!("  \"input\": {input}"),
+        format!("  \"tracks\": {tracks}"),
+        format!("  \"moov_error\": {moov_error}"),
+    ];
+    Ok(format!("{{\n{}\n}}\n", parts.join(",\n")))
+}
+
+/// Snapshots every track's `stsd` entries in a decoded `moov`.
+fn sample_entries_json_for_moov(moov: &MoovBox) -> String {
+    let mut tracks: Vec<String> = Vec::new();
+    for (track_index, trak) in moov.trak_boxes.iter().enumerate() {
+        let mut entries: Vec<String> = Vec::new();
+        for (entry_index, entry) in trak
+            .mdia_box
+            .minf_box
+            .stbl_box
+            .stsd_box
+            .entries
+            .iter()
+            .enumerate()
+        {
+            entries.push(format!(
+                "{{\"entry_index\": {entry_index}, \"snapshot\": {}}}",
+                snapshot_json(&sample_entry_snapshot(entry))
+            ));
+        }
+        tracks.push(format!(
+            "{{\"track_index\": {track_index}, \"entries\": [{}]}}",
+            entries.join(", ")
+        ));
+    }
+    format!("[{}]", tracks.join(", "))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sample_entry_cases_output_is_deterministic_and_covers_variants() {
+        let json = run_sample_entry_cases();
+        assert_eq!(json, run_sample_entry_cases());
+        // 全 variant が観測できる
+        for variant in [
+            "avc1", "hev1", "hvc1", "vp08", "vp09", "av01", "Opus", "mp4a", "fLaC",
+            "unknown",
+        ] {
+            assert!(
+                json.contains(&format!("\"variant={variant}\"")),
+                "missing variant {variant}"
+            );
+        }
+        // 必須子ボックス欠落は invalid_data
+        assert!(json.contains("Missing mandatory 'avcc' box in 'avc1' box"));
+        assert!(json.contains("Missing mandatory 'esds' box in 'mp4a' box"));
+        // バージョン検証
+        assert!(json.contains("Unsupported avcC configuration version: 2"));
+        assert!(json.contains("Unsupported hvcC version: 2"));
+        assert!(json.contains("Unsupported dOps version: 1"));
+        assert!(json.contains("Unsupported av1C version: 2"));
+        assert!(json.contains("Unsupported dfLa version: 1"));
+        // デコード成功だが再エンコード失敗（profile 100 + 末尾省略 avcC）
+        assert!(json.contains("\"name\": \"avc1_profile100_no_tail\""));
+        assert!(json.contains("Missing 'chroma_format' field in 'avcC' box"));
+        // data_reference_index=0 は NonZeroU16 の invalid_input
+        assert!(json.contains("Expected a non-zero integer, but got 0"));
+    }
+
+    #[test]
+    fn sample_entry_cases_cover_every_error_kind() {
+        let json = run_sample_entry_cases();
+        for kind in [
+            "invalid_input",
+            "invalid_data",
+            "insufficient_buffer",
+            "unsupported",
+        ] {
+            assert!(
+                json.contains(kind),
+                "missing error kind {kind}"
+            );
+        }
+    }
+
+    #[test]
+    fn sample_entry_moonbit_output_is_deterministic() {
+        assert_eq!(sample_entry_moonbit_cases(), sample_entry_moonbit_cases());
+        assert_eq!(
+            sample_entry_moonbit_fixtures(),
+            sample_entry_moonbit_fixtures()
+        );
+    }
+
+    #[test]
+    fn sample_entry_fixture_entries_round_trip() {
+        let fixtures = sample_entry_fixture_entries();
+        assert!(fixtures.len() >= 9, "expected entries from all fixtures");
+        for (name, track_index, entry_index, bytes) in &fixtures {
+            let (entry, _) = SampleEntry::decode(bytes).unwrap_or_else(|e| {
+                panic!(
+                    "{name} track {track_index} entry {entry_index}: decode failed: {}: {}",
+                    error_kind_str(e.kind),
+                    e.reason
+                )
+            });
+            assert!(!entry.is_unknown_box() || name.contains("unknown"));
+        }
+    }
 
     #[test]
     fn box_headers_output_is_deterministic_and_covers_boundaries() {
