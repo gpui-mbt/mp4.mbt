@@ -174,13 +174,30 @@ Issue 0007 で確定した対応の補足:
 | `MoovBox::mvex_box.is_some()` | `moov_box.unknown_boxes` 内の `mvex` box_type 走査（`src/demux`） | 判定論理は同一。`MoovBox` の `mvex` 型付けが入った時点で置き換える |
 | （対応型なし） | oracle `kind-detector-cases --moonbit`（`tools/oracle`） | 9 fixture + 合成ケース（non-faststart、未知 box、largesize、size=0、`moov` 未発見、offset オーバーフロー、ftyp 種別/サイズ異常）を上流検出器に通し、`required_input()` の要求列と最終結果（kind または classification/kind/box_type/reason）を凍結。golden は `src/demux/kind_detector_oracle_cases_test.mbt` と差分比較。`moov` より前の `mdat` payload を要求しないことも要求列で検証する |
 
+### Issue 0013 で確定した対応の補足
+
+| 上流（`demux_mp4_file.rs`） | MoonBit | 備考 |
+| --- | --- | --- |
+| `demux::Mp4FileDemuxer` | `Mp4FileDemuxer`（`src/demux`） | `new()` / `required_input()` / `handle_input(Input)` / `tracks()` / `next_sample()` / `prev_sample()` / `seek(Duration)` の同名 API。状態機械（`ReadFtypBoxHeader → ReadFtypBox → ReadMoovBoxHeader → ReadMoovBox → Initialized`）と、各フェーズ末尾で次フェーズへ連鎖する上流の再帰呼び出しもそのまま移植 |
+| `demux::TrackInfo` | `TrackInfo`（`src/demux`） | `track_id : UInt` / `kind : @bytes.TrackKind` / `duration : UInt64` / `timescale : @bytes.NonZeroU32`。`u32` → `UInt`、`u64` → `UInt64` の写像 |
+| `demux::Sample<'a>` | `Sample`（`src/demux`） | `track` / `sample_entry` は上流では demuxer 内部への参照だが、MoonBit 側は値として保持する（`TrackInfo` は不変、`SampleEntry` はデコード済み共有値）。`sample_entry` は sample entry index が変わり内容も異なる場合だけ `Some`（上流の最適化と同じく、index が同じなら内容比較しない） |
+| `core::time::Duration` | `Duration`（`src/demux`） | `seek` の引数用に `secs : UInt64` + `nanos : UInt`（< 1e9）の不変型として移植。`new` / `from_secs` / `from_millis` / `as_secs` / `subsec_nanos` を提供 |
+| `Duration::from_secs(timestamp) / timescale` 比較 | `timestamp_key`（`src/demux`） | サンプル順の比較は `(secs, nanos)` の辞書順キーで行う（secs = `t / ts`、nanos = `(t % ts) * 1_000_000_000 / ts`）。浮動小数を経由しないため精度劣化はなく、同時刻 tie-break は上流と同じく走査順で先のトラックが残る |
+| `duration_to_timestamp` | 同名（`src/demux`、package 内部） | `seek` 用の `Duration` → track timescale 変換。`secs * timescale` / 加算のオーバーフローは上流と同じ `"timestamp overflow"` の `DecodeError` |
+| `handle_input_error.take()` | `ensure_initialized`（`src/demux`、package 内部） | 保持したエラーは `tracks` / `next_sample` / `prev_sample` / `seek` のいずれかが一度だけ取り出し、以後は `required_input()` の状態から `InputRequired` が返る。エラー保持中 `required_input()` は `None` |
+| `SampleTableAccessorError → DemuxError` 変換 | `wrap_sample_table`（`src/demux`、package 内部） | 上流の `From` 実装相当。`stbl` 不整合は `SampleTableError` として raise する |
+| 非 `moov` size 0 box | `read_moov_box_header` 内の `"moov box not found"` | 上流と同じ。size 0 の非 `moov` ボックスは「ファイル末尾まで」と解釈されるため moov は存在しないと判定する |
+| box offset の加算 | `offset + box_size` の前に上限検査（`src/demux`） | 破損入力で `UInt64` が回り込まないよう防御する点だけ上流より厳しい（上流は `usize` で表せない巨大 size を先に拒否するため到達不能） |
+| `handler_type` → `TrackKind` | `HdlrBox::track_kind()`（`src/boxes`） | `vide` / `soun` / `subt` / `text` → `Video` / `Audio` / `Subtitle`、それ以外は `None` でトラックを skip（上流と同じく panic しない） |
+| （対応型なし） | oracle `demux-cases --moonbit`（`tools/oracle`） | 9 fixture + 上流 `Mp4FileMuxer` で生成した合成ファイル（video+audio の timescale 跨ぎ、audio 先頭 tie-break、`ctts` v0/v1、字幕 `stpp`、未知 `hdlr`、faststart、空 `moov`、`stsz` 不整合、`moov` 欠落、size 0 `ftyp`、先頭非 `ftyp`）を上流 demuxer に通し、要求列・track 行・前後両方向の sample 行・`seek` プローブ結果・エラー分類を凍結。golden は `src/demux/mp4_file_demux_oracle_cases_test.mbt`、driver は `mp4_file_demux_oracle_test.mbt`。上流 `Error` の `reason` が常に空の `insufficient_buffer` だけ比較時に正規化する（MoonBit 側は診断文を持つ） |
+
 ### `demux` / `mux` / `bitstream`
 
 | 上流 | 概要 | MoonBit 側の対応（予定） |
 | --- | --- | --- |
 | `demux::{Mp4FileKind, Mp4FileKindDetector}` | MP4/fMP4 種別検出 | `src/demux`（Issue 0012、完了） |
 | `demux::{Input, RequiredInput, DemuxError}` | 共有の入力契約 | `src/demux`（Issue 0012、完了。0013 の `Mp4FileDemuxer` と共用する） |
-| `demux::{Mp4FileDemuxer, Input, RequiredInput, Sample, TrackInfo, DemuxError}` | 通常 MP4 の Sans I/O demux | `src/demux`（Issue 0013） |
+| `demux::{Mp4FileDemuxer, Input, RequiredInput, Sample, TrackInfo, DemuxError}` | 通常 MP4 の Sans I/O demux | `src/demux`（Issue 0013、完了。`prev_sample` / `seek` / `Duration` も同名で移植） |
 | `demux::{Fmp4SegmentDemuxer, Fmp4FileDemuxer}` | fMP4 の demux | `src/demux`（Issue 0018/0019） |
 | `mux::{Mp4FileMuxer, Mp4FileMuxerOptions, Sample, TrackMetadata, FinalizedBoxes, MuxError, estimate_maximum_moov_box_size}` | 通常 MP4 の mux | `src/mux`（Issue 0022） |
 | `mux::{Fmp4SegmentMuxer, SegmentMuxerOptions}` | fMP4 segment の mux | `src/mux`（Issue 0020） |
@@ -233,6 +250,7 @@ Issue 0007 で確定した対応の補足:
 
 ## 7. 更新履歴
 
+- 2026-10-18: Issue 0013（通常 MP4 demuxer）の対応表を追記。`Mp4FileDemuxer` の同名 API（`prev_sample` / `seek` / `Duration` 含む）、`TrackInfo` / `Sample`、`(secs, nanos)` 辞書順の整数タイムスタンプ比較、エラー保持の take セマンティクス、未知 `hdlr` の skip、offset 加算の防御検査、oracle `demux-cases`（muxer 生成の合成入力を含む）を記録。
 - 2026-10-17: Issue 0011（codec string）の対応表を追記。`codec_string::from_sample_entry` → `src/codec_string` の同名関数、各 binding の書式規則（HEVC Annex E の bit-reverse / constraint 末尾省略、AV1 bit depth 分岐、AOT 31 エスケープ）、`H264ProfileLevelId` の未移植部分、字幕 entry の一時差（unsupported）、oracle `codec-strings-cases` を記録。
 - 2026-10-17: Issue 0010（型付き video/audio sample entry）の対応表を追記。`Uint<T,BITS,OFFSET>` の実行時フィールド化、`NonZeroU16`、u16.u16 unsigned ヘルパー、`Visual`/`AudioSampleEntryFields`、9 つの型付き `SampleEntry` variant と設定 box 群、descriptor/`EsdsBox`、字幕 entry の `Unknown` 継続（0028 までの一時差）、`avcC` decode/encode 非対称、oracle `sample-entries` 系モードを記録。
 - 2026-10-17: Issue 0009（stbl と SampleTableAccessor）の対応表を追記。`Either` と `src/box` の `BaseBox` 転送 impl（`pub extend` 不可の理由）、`SampleEntry` の unknown-only（0010 で型付き化）、`MinfBox::stbl_box` の必須化（0008 の一時差の解消）、非ジェネリック accessor（`AsRef` を移植しない意図的な差）、`SampleTableAccessorError` の対応、未規定の重複キー探索を差分対象外にして leftmost 固定する方針、oracle `sample-tables` 系モードを記録。

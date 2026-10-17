@@ -20,6 +20,20 @@ pub fn DemuxError::input_required(UInt64, UInt64?) -> Self
 pub fn DemuxError::to_string(Self) -> String
 
 // Types and methods
+pub struct Duration {
+  // private fields
+} derive(Eq, Hash, @debug.Debug)
+pub fn Duration::as_secs(Self) -> UInt64
+pub fn Duration::equal(Self, Self) -> Bool
+pub fn Duration::from_millis(UInt64) -> Self
+pub fn Duration::from_secs(UInt64) -> Self
+pub fn Duration::hash(Self) -> Int
+pub fn Duration::hash_combine(Self, Hasher) -> Unit
+pub fn Duration::new(UInt64, UInt) -> Self?
+pub fn Duration::not_equal(Self, Self) -> Bool
+pub fn Duration::subsec_nanos(Self) -> UInt
+pub fn Duration::to_repr(Self) -> @debug.Repr
+
 pub(all) struct Input {
   position : UInt64
   data : BytesView
@@ -30,6 +44,17 @@ pub fn Input::hash_combine(Self, Hasher) -> Unit
 pub fn Input::not_equal(Self, Self) -> Bool
 pub fn Input::slice_range(Self, UInt64, UInt64?) -> BytesView?
 pub fn Input::to_repr(Self) -> @debug.Repr
+
+pub struct Mp4FileDemuxer {
+  // private fields
+}
+pub fn Mp4FileDemuxer::handle_input(Self, Input) -> Unit
+pub fn Mp4FileDemuxer::new() -> Self
+pub fn Mp4FileDemuxer::next_sample(Self) -> Sample? raise DemuxError
+pub fn Mp4FileDemuxer::prev_sample(Self) -> Sample? raise DemuxError
+pub fn Mp4FileDemuxer::required_input(Self) -> RequiredInput?
+pub fn Mp4FileDemuxer::seek(Self, Duration) -> Unit raise DemuxError
+pub fn Mp4FileDemuxer::tracks(Self) -> ArrayView[TrackInfo] raise DemuxError
 
 pub(all) enum Mp4FileKind {
   Mp4
@@ -60,6 +85,30 @@ pub fn RequiredInput::is_satisfied_by(Self, Input) -> Bool
 pub fn RequiredInput::not_equal(Self, Self) -> Bool
 pub fn RequiredInput::to_input(Self, BytesView) -> Input
 pub fn RequiredInput::to_repr(Self) -> @debug.Repr
+
+pub(all) struct Sample {
+  track : TrackInfo
+  sample_entry : @boxes.SampleEntry?
+  keyframe : Bool
+  timestamp : UInt64
+  duration : UInt
+  data_offset : UInt64
+  data_size : UInt
+  composition_time_offset : Int64?
+} derive(@debug.Debug)
+pub fn Sample::to_repr(Self) -> @debug.Repr
+
+pub(all) struct TrackInfo {
+  track_id : UInt
+  kind : @bytes.TrackKind
+  duration : UInt64
+  timescale : @bytes.NonZeroU32
+} derive(Eq, Hash, @debug.Debug)
+pub fn TrackInfo::equal(Self, Self) -> Bool
+pub fn TrackInfo::hash(Self) -> Int
+pub fn TrackInfo::hash_combine(Self, Hasher) -> Unit
+pub fn TrackInfo::not_equal(Self, Self) -> Bool
+pub fn TrackInfo::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

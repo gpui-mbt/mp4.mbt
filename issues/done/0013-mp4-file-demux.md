@@ -1,9 +1,9 @@
 # [P0 / M1] Sans I/O通常MP4 Demuxerを移植する
 
-Status: polished
+Status: done
 Model: DeepSeek V4.1 Flash Free
 Created: 2026-10-16
-Updated: 2026-10-16
+Updated: 2026-10-18
 Branch: feat/0013-mp4-file-demux
 Priority: P0
 Milestone: M1
@@ -60,15 +60,15 @@ v0.1 の主要 API として Sans I/O の `Mp4FileDemuxer` を移植し、トラ
 
 ## 受け入れ条件
 
-- [ ] Given pinned Rust oracle の golden, when 同じ fixture を MoonBit demuxer へ入力する, then track の id / kind / duration / timescale が一致する。
-- [ ] Given 上流 `examples/demux.rs` と同条件（先頭 10 sample 表示）, when 比較する, then 表示データが一致する。
-- [ ] Given AAC/Opus/AV1/video-only・複数 track・`moov` 先頭/末尾・CTTS 付きの fixture, when 全 sample を走査する, then DTS / CTTS / offset / size / keyframe が golden と一致する。
-- [ ] Given 複数 track で DTS が並ぶ, when `next_sample` を呼ぶ, then track ID 順ではなく DTS 時間順で返り、異 timebase の同時刻 tie-break も上流実装と一致する。
-- [ ] Given 未充足の Input と短い range, when `handle_input` する, then `InputRequired` 相当になり呼び出し側が再読込できる。
-- [ ] Given 入力が要求位置で EOF に達する, when `handle_input` する, then 明示エラーになり再要求を繰り返さない。
-- [ ] Given 不正な `stbl`, when 初期化・走査する, then `SampleTableError` 相当のエラーになる。
-- [ ] Given 未知 handler の track, when `tracks()` する, then 上流 oracle と同じ track 集合になる（skip され、panic しない）。
-- [ ] Given 大きな `mdat`, when sample を走査する, then payload を全メモリへ保持しない（読取量の証跡）。
+- [x] Given pinned Rust oracle の golden, when 同じ fixture を MoonBit demuxer へ入力する, then track の id / kind / duration / timescale が一致する。（oracle `demux-cases` の `fixture:*` 9 件で `tracks` 行を全件一致。golden: `src/demux/mp4_file_demux_oracle_cases_test.mbt`）
+- [x] Given 上流 `examples/demux.rs` と同条件（先頭 10 sample 表示）, when 比較する, then 表示データが一致する。（oracle `demux` モードの `demux_sample_line` と同一フィールド（track_id / sample_entry / keyframe / dts / duration / pts_offset / data_offset / data_size）を全サンプルで凍結しており、先頭 10 件はその部分集合として一致。表示 CLI そのものは 0014 の範囲）
+- [x] Given AAC/Opus/AV1/video-only・複数 track・`moov` 先頭/末尾・CTTS 付きの fixture, when 全 sample を走査する, then DTS / CTTS / offset / size / keyframe が golden と一致する。（fixture 9 件（h264/h265/av1/AAC/Opus/fMP4）+ 合成 `muxed_*` 7 件で `next_sample`/`prev_sample` 双方の全行を上流と一致。`ctts` v0/v1 は `pts_offset` の `0`/`none`/負値の区別で固定）
+- [x] Given 複数 track で DTS が並ぶ, when `next_sample` を呼ぶ, then track ID 順ではなく DTS 時間順で返り、異 timebase の同時刻 tie-break も上流実装と一致する。（`muxed_video_audio`（video ts=30 / audio ts=48000 の交錯）と `muxed_audio_first`（同時刻 tie を走査順先の audio が取る）で凍結。比較は `(secs, nanos)` の整数辞書順キー、wbtest `timestamp_key`/`timestamp_before` で固定）
+- [x] Given 未充足の Input と短い range, when `handle_input` する, then `InputRequired` 相当になり呼び出し側が再読込できる。（`slice_range` が要求範囲未満で `None` → `InputRequired` を内部で握り `required_input()` が再発行。要求と合わない入力は `DecodeError(invalid_input)` を一度だけ保持、wbtest + black-box test で固定）
+- [x] Given 入力が要求位置で EOF に達する, when `handle_input` する, then 明示エラーになり再要求を繰り返さない。（oracle `moov_missing`: EOF の 0 バイト入力で `invalid_input` DecodeError を保持、取り出し後は同位置の `InputRequired`。black-box `unsatisfied input is reported once as DecodeError then InputRequired`）
+- [x] Given 不正な `stbl`, when 初期化・走査する, then `SampleTableError` 相当のエラーになる。（oracle `corrupt_stsz_count_low` で `classification=sample_table_error,reason=Sample count in 'stts' box is 3, but 'stsz' has sample count 2` を凍結。`corrupt_stsz` は decode 段の `insufficient_buffer` を固定）
+- [x] Given 未知 handler の track, when `tracks()` する, then 上流 oracle と同じ track 集合になる（skip され、panic しない）。（oracle `muxed_unknown_handler`: `hdlr` を `meta` に書き換えたファイルで `tracks: []`、sample 0 件を凍結）
+- [x] Given 大きな `mdat`, when sample を走査する, then payload を全メモリへ保持しない（読取量の証跡）。（全ケースの要求列が `mdat` payload range を含まないことを凍結一致。例: `muxed_video_audio` では `[{0,32},{32,32},{100,32},{1306,32},{1306,1126}]` — 1190 バイトの `mdat` payload は要求されない）
 
 ## テスト計画
 
@@ -101,5 +101,6 @@ v0.1 の主要 API として Sans I/O の `Mp4FileDemuxer` を移植し、トラ
 - 関連: [0009](./0009-sample-tables.md) / [0010](./0010-sample-entries.md) / [0012](./0012-file-kind-detector.md)（前提）、[0014](./0014-demux-example.md)（CLI）、[0015](./0015-web-mp4-dump.md) / [0016](./0016-rust-moonbit-diff.md)（表示と差分）、[0018](./0018-fmp4-segment-demux.md) / [0019](./0019-fmp4-file-demux.md)（fMP4 の demux）。
 - 関連ロードマップ: [0000](./0000-implementation-roadmap.md) の M1 と「変更できないデータ契約」1 / 2 / 4。
 - 証跡ルール: checkbox は実行証拠のある項目のみ完了にし、Rust oracle の未実行を「一致」と扱わない（0000 の進捗更新の規則 1 とテスト分類）。
-- 実装時の未決事項: `prev_sample` / `seek` を本 issue に含めるか、公開 API 名、パッケージ配置は実装時に確定する。
+- 実装時の未決事項の確定結果: `prev_sample` / `seek` は上流 API 完全性のため本 issue に含めた（`core::time::Duration` は不変型 `Duration` として移植）。公開 API 名は上流と同名（`Mp4FileDemuxer` / `TrackInfo` / `Sample` / `Duration`）、パッケージ配置は `src/demux`（0012 と共用）。
 - 2026-10-16: 本文を実装可能な形式へ整備し、実装に着手可能なため polished へ更新。
+- 2026-10-18: 証跡（unit + oracle）: `moon test` 403/403 PASS、`moon test --target js` 403/403、`moon test --target native` 403/403。新規テスト: oracle 差分 1 件（20 ケース — fixture 9 + 合成 11 — の要求列・track・前後 sample・seek プローブ・エラー分類の全件比較）+ black-box `mp4_file_demux_test.mbt` 5 件（初期要求、未初期化の `InputRequired`、エラーの take セマンティクス、全量一括入力での連鎖初期化、sample 列の枯渇）+ wbtest `mp4_file_demux_wbtest.mbt` 7 件（`timestamp_key` 整数除算、timescale 跨ぎ比較、`Duration` 境界、`duration_to_timestamp` 変換と溢れ、フェーズ連鎖、非 `moov` の読み飛ばし、size 0 の `"moov box not found"`）。`moon check` / `moon check --target js` は warning 0。`moon fmt` / `moon info` 実施、公開面は `src/demux/pkg.generated.mbti` の `Duration` / `Mp4FileDemuxer` / `Sample` / `TrackInfo` の 4 型追加のみ。oracle 側は上流 `Mp4FileMuxer` で合成ファイルを生成してから demux に通すため手組みの wire データではない。上流 `Error.reason` が常に空の `insufficient_buffer` のみ driver 側で正規化して比較（MoonBit 側は診断文を持つ意図的な差）。

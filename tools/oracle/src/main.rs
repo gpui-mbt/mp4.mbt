@@ -22,11 +22,16 @@ use std::process::ExitCode;
 use shiguredo_mp4::aux::{SampleTableAccessor, SampleTableAccessorError};
 use shiguredo_mp4::boxes::{
     MediaHeader, MoovBox, SampleEntry, StblBox,
-    AudioSampleEntryFields, VisualSampleEntryFields,
+    AudioSampleEntryFields, Avc1Box, AvccBox, DopsBox, OpusBox, StppBox,
+    VisualSampleEntryFields,
 };
-use shiguredo_mp4::demux::{DemuxError, Input, Mp4FileDemuxer, Mp4FileKind, Mp4FileKindDetector};
+use shiguredo_mp4::demux::{
+    DemuxError, Input, Mp4FileDemuxer, Mp4FileKind, Mp4FileKindDetector, RequiredInput,
+};
+use shiguredo_mp4::mux::{Mp4FileMuxer, Mp4FileMuxerOptions};
 use shiguredo_mp4::{
-    BaseBox, BoxHeader, BoxSize, Decode, Encode, FixedPointNumber, LanguageCode, TrackKind,
+    BaseBox, BoxHeader, BoxSize, Decode, Encode, FixedPointNumber, LanguageCode, TrackKind, Uint,
+    Utf8String,
 };
 
 /// Pinned upstream revision (must match Cargo.toml and docs/upstream.md).
@@ -162,6 +167,10 @@ fn main() -> ExitCode {
             print!("{}", kind_detector_moonbit_cases());
             ExitCode::SUCCESS
         }
+        Some("demux-cases") if args.len() == 3 && args[2] == "--moonbit" => {
+            print!("{}", demux_cases_moonbit());
+            ExitCode::SUCCESS
+        }
         _ => {
             eprintln!("usage: mp4-oracle demux <mp4-file>");
             eprintln!("       mp4-oracle box-headers");
@@ -185,6 +194,7 @@ fn main() -> ExitCode {
             eprintln!("       mp4-oracle codec-strings-cases");
             eprintln!("       mp4-oracle codec-strings-cases --moonbit");
             eprintln!("       mp4-oracle kind-detector-cases --moonbit");
+            eprintln!("       mp4-oracle demux-cases --moonbit");
             ExitCode::from(2)
         }
     }
@@ -5594,6 +5604,834 @@ fn kind_detector_moonbit_cases() -> String {
                 let _ = writeln!(out, "    reason: {},", moonbit_string(&reason));
             }
         }
+        let _ = writeln!(out, "  }},");
+    }
+    let _ = writeln!(out, "]");
+    out
+}
+// ===== `demux-cases` — Mp4FileDemuxer の凍結ケース表 =====
+
+/// A single demux-cases entry: input bytes plus the upstream-observed
+/// request log, track listing, forward/backward sample streams, and
+/// optional seek probes.
+struct DemuxCase {
+    name: String,
+    input: Vec<u8>,
+    seek_probes: Vec<(u64, u32)>,
+}
+
+/// Outcome of driving `Mp4FileDemuxer` over a case input.
+struct DemuxCaseOutcome {
+    requests: Vec<(u64, Option<u64>)>,
+    tracks: Vec<String>,
+    tracks_error: String,
+    samples: Vec<String>,
+    samples_error: String,
+    prev_samples: Vec<String>,
+    prev_error: String,
+    seek_results: Vec<(u64, u32, String)>,
+}
+
+/// Test `Avc1Box` mirroring upstream `create_avc1_sample_entry`.
+fn demux_avc1_entry() -> SampleEntry {
+    SampleEntry::Avc1(Avc1Box {
+        visual: VisualSampleEntryFields {
+            data_reference_index: VisualSampleEntryFields::DEFAULT_DATA_REFERENCE_INDEX,
+            width: 640,
+            height: 480,
+            horizresolution: VisualSampleEntryFields::DEFAULT_HORIZRESOLUTION,
+            vertresolution: VisualSampleEntryFields::DEFAULT_VERTRESOLUTION,
+            frame_count: VisualSampleEntryFields::DEFAULT_FRAME_COUNT,
+            compressorname: VisualSampleEntryFields::NULL_COMPRESSORNAME,
+            depth: VisualSampleEntryFields::DEFAULT_DEPTH,
+        },
+        avcc_box: AvccBox {
+            avc_profile_indication: 66,
+            profile_compatibility: 0,
+            avc_level_indication: 30,
+            length_size_minus_one: Uint::new(3),
+            sps_list: vec![],
+            pps_list: vec![],
+            chroma_format: None,
+            bit_depth_luma_minus8: None,
+            bit_depth_chroma_minus8: None,
+            sps_ext_list: vec![],
+        },
+        unknown_boxes: vec![],
+    })
+}
+
+/// Test `OpusBox` mirroring upstream `create_opus_sample_entry`.
+fn demux_opus_entry() -> SampleEntry {
+    SampleEntry::Opus(OpusBox {
+        audio: AudioSampleEntryFields {
+            data_reference_index: AudioSampleEntryFields::DEFAULT_DATA_REFERENCE_INDEX,
+            channelcount: 2,
+            samplesize: AudioSampleEntryFields::DEFAULT_SAMPLESIZE,
+            samplerate: FixedPointNumber::new(48000u16, 0),
+        },
+        dops_box: DopsBox {
+            output_channel_count: 2,
+            pre_skip: 312,
+            input_sample_rate: 48000,
+            output_gain: 0,
+        },
+        unknown_boxes: vec![],
+    })
+}
+
+/// Test `StppBox` mirroring upstream `create_stpp_sample_entry`.
+fn demux_stpp_entry() -> SampleEntry {
+    SampleEntry::Stpp(StppBox {
+        data_reference_index: StppBox::DEFAULT_DATA_REFERENCE_INDEX,
+        namespace: Utf8String::new("http://www.w3.org/ns/ttml").expect("no null byte"),
+        schema_location: Utf8String::EMPTY,
+        auxiliary_mime_types: Utf8String::EMPTY,
+        unknown_boxes: vec![],
+    })
+}
+
+/// Appends one sample at `offset` (which it advances by `data_size`).
+fn append_demux_sample(
+    muxer: &mut Mp4FileMuxer,
+    offset: &mut u64,
+    track_kind: TrackKind,
+    sample_entry: Option<SampleEntry>,
+    keyframe: bool,
+    timescale: u32,
+    duration: u32,
+    composition_time_offset: Option<i64>,
+    data_size: usize,
+) {
+    muxer
+        .append_sample(&shiguredo_mp4::mux::Sample {
+            track_kind,
+            sample_entry,
+            keyframe,
+            timescale: std::num::NonZeroU32::new(timescale).expect("nonzero timescale"),
+            duration,
+            composition_time_offset,
+            data_offset: *offset,
+            data_size,
+        })
+        .expect("append_sample failed");
+    *offset += data_size as u64;
+}
+
+/// Assembles the final file bytes from a finalized muxer, mirroring upstream
+/// `build_file_data` (non-faststart: ftyp | mdat | moov).
+fn assemble_muxed_file(muxer: &Mp4FileMuxer, data_end: u64) -> Vec<u8> {
+    let finalized = muxer.finalized_boxes().expect("finalized boxes").clone();
+    let initial = muxer.initial_boxes_bytes().to_vec();
+    let mut file = vec![0u8; data_end as usize];
+    file[..initial.len()].copy_from_slice(&initial);
+    let mut max_end = data_end as usize;
+    for (offset, bytes) in finalized.offset_and_bytes_pairs() {
+        let end = offset as usize + bytes.len();
+        if end > file.len() {
+            file.resize(end, 0);
+        }
+        file[offset as usize..end].copy_from_slice(bytes);
+        max_end = max_end.max(end);
+    }
+    file.truncate(max_end);
+    file
+}
+
+/// Multi-track file: avc1 video (timescale 30) + Opus audio (timescale 48000),
+/// mixed keyframe flags and v1 `ctts` offsets on the video track.
+fn muxed_video_audio() -> Vec<u8> {
+    let mut muxer = Mp4FileMuxer::new().expect("muxer");
+    let mut offset = muxer.initial_boxes_bytes().len() as u64;
+    let avc1 = demux_avc1_entry();
+    let opus = demux_opus_entry();
+    append_demux_sample(
+        &mut muxer,
+        &mut offset,
+        TrackKind::Video,
+        Some(avc1),
+        true,
+        30,
+        30,
+        Some(4),
+        100,
+    );
+    append_demux_sample(
+        &mut muxer,
+        &mut offset,
+        TrackKind::Audio,
+        Some(opus),
+        true,
+        48000,
+        48000,
+        None,
+        200,
+    );
+    append_demux_sample(
+        &mut muxer,
+        &mut offset,
+        TrackKind::Video,
+        None,
+        false,
+        30,
+        30,
+        Some(0),
+        110,
+    );
+    append_demux_sample(
+        &mut muxer,
+        &mut offset,
+        TrackKind::Audio,
+        None,
+        true,
+        48000,
+        48000,
+        None,
+        210,
+    );
+    append_demux_sample(
+        &mut muxer,
+        &mut offset,
+        TrackKind::Video,
+        None,
+        false,
+        30,
+        30,
+        Some(-2),
+        120,
+    );
+    append_demux_sample(
+        &mut muxer,
+        &mut offset,
+        TrackKind::Audio,
+        None,
+        true,
+        48000,
+        48000,
+        None,
+        220,
+    );
+    append_demux_sample(
+        &mut muxer,
+        &mut offset,
+        TrackKind::Audio,
+        None,
+        true,
+        48000,
+        48000,
+        None,
+        230,
+    );
+    muxer.finalize().expect("finalize");
+    assemble_muxed_file(&muxer, offset)
+}
+
+/// Same two timescales but the audio track is appended first, so it becomes
+/// track 1 and wins the same-second ties (upstream keeps the earliest track
+/// in scan order on equal `Duration` keys).
+fn muxed_audio_first() -> Vec<u8> {
+    let mut muxer = Mp4FileMuxer::new().expect("muxer");
+    let mut offset = muxer.initial_boxes_bytes().len() as u64;
+    append_demux_sample(
+        &mut muxer,
+        &mut offset,
+        TrackKind::Audio,
+        Some(demux_opus_entry()),
+        true,
+        48000,
+        48000,
+        None,
+        200,
+    );
+    append_demux_sample(
+        &mut muxer,
+        &mut offset,
+        TrackKind::Video,
+        Some(demux_avc1_entry()),
+        true,
+        30,
+        30,
+        None,
+        100,
+    );
+    append_demux_sample(
+        &mut muxer,
+        &mut offset,
+        TrackKind::Audio,
+        None,
+        true,
+        48000,
+        48000,
+        None,
+        210,
+    );
+    append_demux_sample(
+        &mut muxer,
+        &mut offset,
+        TrackKind::Video,
+        None,
+        false,
+        30,
+        30,
+        None,
+        110,
+    );
+    muxer.finalize().expect("finalize");
+    assemble_muxed_file(&muxer, offset)
+}
+
+/// Video-only file with a v0 `ctts` (non-negative offsets incl. explicit 0).
+fn muxed_ctts_v0() -> Vec<u8> {
+    let mut muxer = Mp4FileMuxer::new().expect("muxer");
+    let mut offset = muxer.initial_boxes_bytes().len() as u64;
+    append_demux_sample(
+        &mut muxer,
+        &mut offset,
+        TrackKind::Video,
+        Some(demux_avc1_entry()),
+        true,
+        30,
+        30,
+        Some(0),
+        100,
+    );
+    append_demux_sample(
+        &mut muxer,
+        &mut offset,
+        TrackKind::Video,
+        None,
+        false,
+        30,
+        30,
+        Some(4),
+        110,
+    );
+    append_demux_sample(
+        &mut muxer,
+        &mut offset,
+        TrackKind::Video,
+        None,
+        true,
+        30,
+        30,
+        Some(0),
+        120,
+    );
+    muxer.finalize().expect("finalize");
+    assemble_muxed_file(&muxer, offset)
+}
+
+/// Video + subtitle (`stpp` entry → `subt` handler → `TrackKind::Subtitle`).
+fn muxed_subtitle() -> Vec<u8> {
+    let mut muxer = Mp4FileMuxer::new().expect("muxer");
+    let mut offset = muxer.initial_boxes_bytes().len() as u64;
+    append_demux_sample(
+        &mut muxer,
+        &mut offset,
+        TrackKind::Video,
+        Some(demux_avc1_entry()),
+        true,
+        30,
+        30,
+        None,
+        100,
+    );
+    append_demux_sample(
+        &mut muxer,
+        &mut offset,
+        TrackKind::Subtitle,
+        Some(demux_stpp_entry()),
+        true,
+        1000,
+        500,
+        None,
+        64,
+    );
+    append_demux_sample(
+        &mut muxer,
+        &mut offset,
+        TrackKind::Subtitle,
+        None,
+        true,
+        1000,
+        500,
+        None,
+        72,
+    );
+    muxer.finalize().expect("finalize");
+    assemble_muxed_file(&muxer, offset)
+}
+
+/// Single-video file whose `hdlr` handler_type is patched to an unknown fourcc;
+/// upstream skips the track entirely (`tracks` is empty).
+fn muxed_unknown_handler() -> Vec<u8> {
+    let mut file = {
+        let mut muxer = Mp4FileMuxer::new().expect("muxer");
+        let mut offset = muxer.initial_boxes_bytes().len() as u64;
+        append_demux_sample(
+            &mut muxer,
+            &mut offset,
+            TrackKind::Video,
+            Some(demux_avc1_entry()),
+            true,
+            30,
+            30,
+            None,
+            100,
+        );
+        muxer.finalize().expect("finalize");
+        assemble_muxed_file(&muxer, offset)
+    };
+    // Locate the media `hdlr` box and overwrite handler_type ('hdlr'(4) +
+    // version/flags(4) + pre_defined(4) => handler_type at +12).
+    for i in 0..file.len().saturating_sub(16) {
+        if &file[i..i + 4] == b"hdlr" && &file[i + 12..i + 16] == b"vide" {
+            file[i + 12..i + 16].copy_from_slice(b"meta");
+            break;
+        }
+    }
+    file
+}
+
+/// Video-only faststart file (`moov` placed before `mdat`).
+fn muxed_faststart() -> Vec<u8> {
+    let options = Mp4FileMuxerOptions {
+        reserved_moov_box_size: 8192,
+        ..Default::default()
+    };
+    let mut muxer = Mp4FileMuxer::with_options(options).expect("muxer");
+    let mut offset = muxer.initial_boxes_bytes().len() as u64;
+    append_demux_sample(
+        &mut muxer,
+        &mut offset,
+        TrackKind::Video,
+        Some(demux_avc1_entry()),
+        true,
+        30,
+        30,
+        None,
+        100,
+    );
+    append_demux_sample(
+        &mut muxer,
+        &mut offset,
+        TrackKind::Video,
+        None,
+        false,
+        30,
+        30,
+        None,
+        110,
+    );
+    muxer.finalize().expect("finalize");
+    assemble_muxed_file(&muxer, offset)
+}
+
+/// Finalized with no samples at all (`moov` has no `trak`).
+fn muxed_empty() -> Vec<u8> {
+    let mut muxer = Mp4FileMuxer::new().expect("muxer");
+    let offset = muxer.initial_boxes_bytes().len() as u64;
+    muxer.finalize().expect("finalize");
+    assemble_muxed_file(&muxer, offset)
+}
+
+/// A valid file whose `stsz` declared sample_count is bumped by one; the
+/// `stsz` box decode itself fails with `InsufficientBuffer`.
+fn corrupt_stsz(base: &[u8]) -> Vec<u8> {
+    let mut file = base.to_vec();
+    for i in 0..file.len().saturating_sub(16) {
+        if &file[i..i + 4] == b"stsz" {
+            // sample_count sits at 'stsz'(4) + version/flags(4) +
+            // sample_size(4) => field at +12 relative to 'stsz' fourcc.
+            let pos = i + 12;
+            let count =
+                u32::from_be_bytes([file[pos], file[pos + 1], file[pos + 2], file[pos + 3]]);
+            file[pos..pos + 4].copy_from_slice(&(count + 1).to_be_bytes());
+            break;
+        }
+    }
+    file
+}
+
+/// A valid file whose `stsz` declared sample_count is shrunk by one; `stsz`
+/// still decodes but the upstream `SampleTableAccessor` reports
+/// `InconsistentSampleCount` and the demuxer surfaces `SampleTableError`.
+fn corrupt_stsz_count_low(base: &[u8]) -> Vec<u8> {
+    let mut file = base.to_vec();
+    for i in 0..file.len().saturating_sub(16) {
+        if &file[i..i + 4] == b"stsz" {
+            let pos = i + 12;
+            let count =
+                u32::from_be_bytes([file[pos], file[pos + 1], file[pos + 2], file[pos + 3]]);
+            file[pos..pos + 4].copy_from_slice(&(count - 1).to_be_bytes());
+            break;
+        }
+    }
+    file
+}
+
+/// Truncates the file just before the `moov` box so the demuxer runs into EOF.
+fn without_moov(base: &[u8]) -> Vec<u8> {
+    for i in 0..base.len().saturating_sub(4) {
+        if &base[i..i + 4] == b"moov" {
+            return base[..i - 4].to_vec();
+        }
+    }
+    base.to_vec()
+}
+
+/// Patches the `ftyp` declared size to 0 (upstream treats it as "to EOF" and
+/// still decodes the `ftyp` box normally — unlike the kind detector).
+fn with_zero_size_ftyp(base: &[u8]) -> Vec<u8> {
+    let mut file = base.to_vec();
+    if &file[4..8] == b"ftyp" {
+        file[0..4].copy_from_slice(&0u32.to_be_bytes());
+    }
+    file
+}
+
+/// Overwrites the leading `ftyp` fourcc so the first box is not `ftyp`.
+fn with_renamed_ftyp(base: &[u8]) -> Vec<u8> {
+    let mut file = base.to_vec();
+    if &file[4..8] == b"ftyp" {
+        file[4..8].copy_from_slice(b"free");
+    }
+    file
+}
+
+/// The full demux-cases table: checked-in fixtures plus synthetic inputs.
+fn demux_cases(video_audio: &[u8]) -> Vec<DemuxCase> {
+    let mut cases = Vec::new();
+    for (name, data) in SAMPLE_TABLE_FIXTURES {
+        cases.push(DemuxCase {
+            name: format!("fixture:{name}"),
+            input: data.to_vec(),
+            seek_probes: vec![],
+        });
+    }
+
+    cases.push(DemuxCase {
+        name: "muxed_video_audio".to_owned(),
+        input: video_audio.to_vec(),
+        seek_probes: vec![(0, 0), (1, 0), (1, 500_000_000), (100, 0)],
+    });
+    cases.push(DemuxCase {
+        name: "muxed_audio_first".to_owned(),
+        input: muxed_audio_first(),
+        seek_probes: vec![(1, 0)],
+    });
+    cases.push(DemuxCase {
+        name: "muxed_ctts_v0".to_owned(),
+        input: muxed_ctts_v0(),
+        seek_probes: vec![],
+    });
+    cases.push(DemuxCase {
+        name: "muxed_subtitle".to_owned(),
+        input: muxed_subtitle(),
+        seek_probes: vec![],
+    });
+    cases.push(DemuxCase {
+        name: "muxed_unknown_handler".to_owned(),
+        input: muxed_unknown_handler(),
+        seek_probes: vec![],
+    });
+    cases.push(DemuxCase {
+        name: "muxed_faststart".to_owned(),
+        input: muxed_faststart(),
+        seek_probes: vec![],
+    });
+    cases.push(DemuxCase {
+        name: "muxed_empty".to_owned(),
+        input: muxed_empty(),
+        seek_probes: vec![],
+    });
+    cases.push(DemuxCase {
+        name: "corrupt_stsz".to_owned(),
+        input: corrupt_stsz(video_audio),
+        seek_probes: vec![],
+    });
+    cases.push(DemuxCase {
+        name: "corrupt_stsz_count_low".to_owned(),
+        input: corrupt_stsz_count_low(video_audio),
+        seek_probes: vec![],
+    });
+    cases.push(DemuxCase {
+        name: "moov_missing".to_owned(),
+        input: without_moov(video_audio),
+        seek_probes: vec![],
+    });
+    cases.push(DemuxCase {
+        name: "ftyp_size_zero".to_owned(),
+        input: with_zero_size_ftyp(video_audio),
+        seek_probes: vec![],
+    });
+    cases.push(DemuxCase {
+        name: "not_ftyp_first".to_owned(),
+        input: with_renamed_ftyp(video_audio),
+        seek_probes: vec![],
+    });
+    cases
+}
+
+/// Slices `data` to exactly the requested range (clamped at EOF), so the
+/// request log proves that `mdat` payloads are never needed.
+fn required_slice<'a>(data: &'a [u8], required: &RequiredInput) -> &'a [u8] {
+    let start = usize::try_from(required.position)
+        .unwrap_or(usize::MAX)
+        .min(data.len());
+    match required.size {
+        Some(size) => {
+            let end = start
+                .saturating_add(usize::try_from(size).unwrap_or(usize::MAX))
+                .min(data.len());
+            &data[start..end]
+        }
+        None => &data[start..],
+    }
+}
+
+/// Renders a `DemuxError` as the frozen
+/// `classification=...,key=value,...` line used by the case table.
+fn demux_error_line(error: &DemuxError) -> String {
+    match error {
+        DemuxError::DecodeError(e) => format!(
+            "classification=decode_error,error_kind={},box_type={},reason={}",
+            error_kind_str(e.kind),
+            e.box_type.map(|t| t.to_string()).unwrap_or_default(),
+            e.reason,
+        ),
+        DemuxError::SampleTableError(e) => {
+            format!("classification=sample_table_error,reason={e}")
+        }
+        DemuxError::InvalidState(m) => {
+            format!("classification=invalid_state,reason={m}")
+        }
+        DemuxError::InputRequired(r) => format!(
+            "classification=input_required,position={},size={}",
+            r.position,
+            r.size
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| "none".to_owned()),
+        ),
+    }
+}
+
+/// Frozen one-line description of a demuxed sample.
+fn demux_sample_line(sample: &shiguredo_mp4::demux::Sample) -> String {
+    let entry = match &sample.sample_entry {
+        Some(entry) => entry.box_type().to_string(),
+        None => "none".to_owned(),
+    };
+    let cto = match sample.composition_time_offset {
+        Some(v) => v.to_string(),
+        None => "none".to_owned(),
+    };
+    format!(
+        "track_id={},sample_entry={},keyframe={},dts={},duration={},pts_offset={},data_offset={},data_size={}",
+        sample.track.track_id,
+        entry,
+        sample.keyframe,
+        sample.timestamp,
+        sample.duration,
+        cto,
+        sample.data_offset,
+        sample.data_size,
+    )
+}
+
+/// Frozen one-line description of a track.
+fn demux_track_line(track: &shiguredo_mp4::demux::TrackInfo) -> String {
+    format!(
+        "track_id={},kind={},duration={},timescale={}",
+        track.track_id,
+        track_kind_str(track.kind),
+        track.duration,
+        track.timescale.get(),
+    )
+}
+
+/// Feeds `Mp4FileDemuxer` with exactly the requested ranges and records the
+/// observable upstream behavior for the case table.
+fn drive_demux_case(case: &DemuxCase) -> DemuxCaseOutcome {
+    let mut demuxer = Mp4FileDemuxer::new();
+    let mut requests = Vec::new();
+    for _ in 0..MAX_INPUT_STEPS {
+        match demuxer.required_input() {
+            Some(required) => {
+                requests.push((required.position, required.size.map(|s| s as u64)));
+                let data = required_slice(&case.input, &required);
+                demuxer.handle_input(Input {
+                    position: required.position,
+                    data,
+                });
+            }
+            None => break,
+        }
+    }
+
+    let (tracks, tracks_error) = match demuxer.tracks() {
+        Ok(tracks) => (tracks.iter().map(demux_track_line).collect(), String::new()),
+        Err(e) => (Vec::new(), demux_error_line(&e)),
+    };
+
+    let mut samples = Vec::new();
+    let mut samples_error = String::new();
+    loop {
+        match demuxer.next_sample() {
+            Ok(Some(sample)) => samples.push(demux_sample_line(&sample)),
+            Ok(None) => break,
+            Err(e) => {
+                samples_error = demux_error_line(&e);
+                break;
+            }
+        }
+        if samples.len() as u64 > MAX_SAMPLES {
+            samples_error =
+                "classification=input_required,reason=sample enumeration did not terminate"
+                    .to_owned();
+            break;
+        }
+    }
+
+    let mut prev_samples = Vec::new();
+    let mut prev_error = String::new();
+    loop {
+        match demuxer.prev_sample() {
+            Ok(Some(sample)) => prev_samples.push(demux_sample_line(&sample)),
+            Ok(None) => break,
+            Err(e) => {
+                prev_error = demux_error_line(&e);
+                break;
+            }
+        }
+        if prev_samples.len() as u64 > MAX_SAMPLES {
+            prev_error =
+                "classification=input_required,reason=sample enumeration did not terminate"
+                    .to_owned();
+            break;
+        }
+    }
+
+    let mut seek_results = Vec::new();
+    for &(secs, nanos) in &case.seek_probes {
+        let expected = match demuxer.seek(std::time::Duration::new(secs, nanos)) {
+            Ok(()) => match demuxer.next_sample() {
+                Ok(Some(sample)) => demux_sample_line(&sample),
+                Ok(None) => "none".to_owned(),
+                Err(e) => format!("error:{}", demux_error_line(&e)),
+            },
+            Err(e) => format!("error:{}", demux_error_line(&e)),
+        };
+        seek_results.push((secs, nanos, expected));
+    }
+
+    DemuxCaseOutcome {
+        requests,
+        tracks,
+        tracks_error,
+        samples,
+        samples_error,
+        prev_samples,
+        prev_error,
+        seek_results,
+    }
+}
+
+/// `demux-cases --moonbit` — request logs, track/sample streams, and seek
+/// probes frozen from the upstream demuxer, consumed by
+/// `src/demux/mp4_file_demux_oracle_test.mbt`.
+fn demux_cases_moonbit() -> String {
+    let mut out = String::new();
+    let _ = writeln!(
+        out,
+        "// Generated by `cargo run -- demux-cases --moonbit` (tools/oracle)."
+    );
+    let _ = writeln!(
+        out,
+        "// Source of truth: tools/oracle/src/main.rs (demux_cases + SAMPLE_TABLE_FIXTURES)."
+    );
+    let _ = writeln!(out, "// Upstream: shiguredo/mp4-rs@{UPSTREAM_SHA}");
+    let _ = writeln!(
+        out,
+        "// DO NOT EDIT MANUALLY. Regenerate (canonical formatting is part of the file):"
+    );
+    let _ = writeln!(
+        out,
+        "//   (cd tools/oracle && cargo run -- demux-cases --moonbit) \\\\"
+    );
+    let _ = writeln!(
+        out,
+        "//     > src/demux/mp4_file_demux_oracle_cases_test.mbt"
+    );
+    let _ = writeln!(out, "//   moon fmt");
+    let _ = writeln!(out);
+    let _ = writeln!(out, "///|");
+    let _ = writeln!(
+        out,
+        "/// `tools/oracle` の `demux-cases` が返すケース表（生成物）。"
+    );
+    let _ = writeln!(out, "///");
+    let _ = writeln!(
+        out,
+        "/// 型は `src/demux/mp4_file_demux_oracle_test.mbt` で定義する。手で編集しない。"
+    );
+    let _ = writeln!(out, "let oracle_demux_cases : Array[OracleDemuxCase] = [");
+
+    let video_audio = muxed_video_audio();
+    for case in &demux_cases(&video_audio) {
+        let outcome = drive_demux_case(case);
+        let _ = writeln!(out, "  {{");
+        let _ = writeln!(out, "    name: {},", moonbit_string(&case.name));
+        let _ = writeln!(out, "    input: {},", moonbit_bytes_chunked(&case.input));
+        let request_strs: Vec<String> = outcome
+            .requests
+            .iter()
+            .map(|(position, size)| match size {
+                Some(size) => format!("{{ position: {position}, size: Some({size}) }}"),
+                None => format!("{{ position: {position}, size: None }}"),
+            })
+            .collect();
+        let _ = writeln!(out, "    requests: [{}],", request_strs.join(", "));
+        let tracks: Vec<String> = outcome
+            .tracks
+            .iter()
+            .map(|line| moonbit_string(line))
+            .collect();
+        let _ = writeln!(out, "    tracks: [{}],", tracks.join(", "));
+        let _ = writeln!(
+            out,
+            "    tracks_error: {},",
+            moonbit_string(&outcome.tracks_error)
+        );
+        let _ = writeln!(out, "    samples: [");
+        for line in &outcome.samples {
+            let _ = writeln!(out, "      {},", moonbit_string(line));
+        }
+        let _ = writeln!(out, "    ],");
+        let _ = writeln!(
+            out,
+            "    samples_error: {},",
+            moonbit_string(&outcome.samples_error)
+        );
+        let _ = writeln!(out, "    prev_samples: [");
+        for line in &outcome.prev_samples {
+            let _ = writeln!(out, "      {},", moonbit_string(line));
+        }
+        let _ = writeln!(out, "    ],");
+        let _ = writeln!(
+            out,
+            "    prev_error: {},",
+            moonbit_string(&outcome.prev_error)
+        );
+        let _ = writeln!(out, "    seek_probes: [");
+        for (secs, nanos, expected) in &outcome.seek_results {
+            let _ = writeln!(
+                out,
+                "      {{ secs: {secs}, nanos: {nanos}U, expected: {} }},",
+                moonbit_string(expected)
+            );
+        }
+        let _ = writeln!(out, "    ],");
         let _ = writeln!(out, "  }},");
     }
     let _ = writeln!(out, "]");
