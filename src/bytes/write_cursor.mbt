@@ -123,6 +123,19 @@ pub fn WriteCursor::write_fixed_8_8(
 }
 
 ///|
+/// `u8.u8` の固定小数点数（8.8、符号なし整数部）を書く。
+///
+/// [`ReadCursor::read_fixed_8_8_unsigned`] の対になる書き込みで、
+/// 整数部は生バイトとして書かれる。
+pub fn WriteCursor::write_fixed_8_8_unsigned(
+  self : WriteCursor,
+  value : FixedPointNumber,
+) -> Unit {
+  self.write_u8(value.integer().reinterpret_as_uint())
+  self.write_u8(value.fraction())
+}
+
+///|
 /// FourCC の 4 バイトを書く。
 pub fn WriteCursor::write_fourcc(self : WriteCursor, value : FourCC) -> Unit {
   self.buffer.write_bytes(value.as_bytes())

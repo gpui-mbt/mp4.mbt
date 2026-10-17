@@ -34,6 +34,12 @@ cargo run --quiet -- box-tree ../../tests/fixtures/upstream/black-h264-video.mp4
 # box-tree boundary-case table (JSON on stdout)
 cargo run --quiet -- box-tree-cases
 
+# decoded moov snapshot of one file (JSON on stdout)
+cargo run --quiet -- moov-tree ../../tests/fixtures/upstream/black-h264-video.mp4
+
+# moov boundary-case table (JSON on stdout)
+cargo run --quiet -- moov-tree-cases
+
 # regenerate all goldens and verify determinism + fixture hashes
 cd ../..
 moon run tools/oracle/regenerate_fixtures.mbtx
@@ -96,6 +102,38 @@ regenerates every generated table in place, runs `moon fmt` and fails on any
 `git diff`, so changing `box_tree_cases` or `BOX_TREE_FIXTURES` always requires
 regenerating the MoonBit side in the same commit.
 
+### Moov tree case table and embedded moovs
+
+`moov-tree <file>` extracts the top-level `moov` box from one file (a fixture
+without `moov` is reported as `invalid_data`, "moov box not found") and decodes
+it with the upstream `MoovBox`. It prints the normalised moov snapshot: the
+`mvhd` fields, the per-track `tkhd` / optional `edts`+`elst` / `mdia` (`mdhd`,
+`hdlr`) / `minf` (`media_header`, `dinf`→`dref`→`url `) fields described below.
+64-bit values are decimal strings, fixed-point and other raw field bytes are
+lowercase hex, and matrix values are comma-separated decimals.
+
+`moov-tree-cases` runs the fixed whole-box boundary-case table in `src/main.rs`
+(`moov_tree_cases`); `moov-tree-cases --moonbit` emits it as
+`src/boxes/moov_tree_oracle_cases_test.mbt`. `moov-tree-fixtures --moonbit`
+emits `src/boxes/moov_tree_oracle_fixtures_test.mbt` with the top-level `moov`
+box bytes extracted from the two checked-in fixtures (`black-h264-video.mp4`
+and `black-h264-fmp4.mp4`; the file header records each moov byte length and
+sha256) and their expected snapshots. Both are consumed by
+`src/boxes/moov_tree_oracle_test.mbt`:
+
+```bash
+cd tools/oracle
+cargo run --quiet -- moov-tree-cases --moonbit > ../../src/boxes/moov_tree_oracle_cases_test.mbt
+cargo run --quiet -- moov-tree-fixtures --moonbit > ../../src/boxes/moov_tree_oracle_fixtures_test.mbt
+cd ../..
+moon fmt   # canonical formatting is part of the generated files
+```
+
+The generated files are committed and must not be edited by hand. CI
+regenerates every generated table in place, runs `moon fmt` and fails on any
+`git diff`, so changing `moov_tree_cases` or `MOOV_TREE_FIXTURES` always
+requires regenerating the MoonBit side in the same commit.
+
 ## Normalised schema (version 1)
 
 - `input`: `name`, `size` and `sha256` of the fixture (size is a decimal string).
@@ -115,6 +153,15 @@ regenerating the MoonBit side in the same commit.
   (`{"status": "ok", "nodes": [...]}` or `{"status": "error",
   "error_kind": "..."}`). Node `start` / `declared_size` / `total_size` are
   decimal strings; `type_hex` keeps the raw box-type bytes.
+- `moov-tree <file>` prints a separate document with `input` (name/size/sha256
+  of the fixture, not the extracted `moov`) and `moov_tree`
+  (`{"status": "ok", "snapshot": [...]}` or `{"status": "error",
+  "error_kind": "...", "reason": "..."}`). `snapshot` is a flat array of
+  `path=value` lines over the decoded `MoovBox`; the exact line list is frozen
+  by `moov_snapshot` in `src/main.rs` and mirrored by
+  `src/boxes/moov_tree_oracle_test.mbt`. Note that upstream
+  `insufficient_buffer` errors carry an empty `reason`, so the differential
+  test compares `reason` only when the oracle reports one.
 
 Unavailable fixtures or oracle failures are reported as failures by
 `regenerate_fixtures.mbtx`; they are never treated as "no difference".

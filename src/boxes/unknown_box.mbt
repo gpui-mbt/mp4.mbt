@@ -23,10 +23,13 @@ pub struct UnknownBox {
   box_size : @box.BoxSize
   /// ペイロード
   payload : Bytes
-} derive(Eq, Debug)
+} derive(Eq, Hash, Debug)
 
 ///|
 pub extend UnknownBox with Eq::{equal, not_equal}
+
+///|
+pub extend UnknownBox with Hash::{hash, hash_combine}
 
 ///|
 pub extend UnknownBox with Debug::{to_repr}

@@ -19,8 +19,11 @@ use std::fs;
 use std::path::Path;
 use std::process::ExitCode;
 
+use shiguredo_mp4::boxes::{MediaHeader, MoovBox};
 use shiguredo_mp4::demux::{DemuxError, Input, Mp4FileDemuxer, Mp4FileKind, Mp4FileKindDetector};
-use shiguredo_mp4::{BaseBox, BoxHeader, BoxSize, Decode, Encode, TrackKind};
+use shiguredo_mp4::{
+    BaseBox, BoxHeader, BoxSize, Decode, Encode, FixedPointNumber, LanguageCode, TrackKind,
+};
 
 /// Pinned upstream revision (must match Cargo.toml and docs/upstream.md).
 const UPSTREAM_SHA: &str = "1282b704f44184ec792e1549b5d31e0c4c54dc59";
@@ -77,6 +80,28 @@ fn main() -> ExitCode {
             print!("{}", box_tree_moonbit_fixtures());
             ExitCode::SUCCESS
         }
+        Some("moov-tree") if args.len() == 3 => match run_moov_tree(&args[2]) {
+            Ok(json) => {
+                println!("{json}");
+                ExitCode::SUCCESS
+            }
+            Err(e) => {
+                eprintln!("oracle error: {e}");
+                ExitCode::FAILURE
+            }
+        },
+        Some("moov-tree-cases") if args.len() == 2 => {
+            println!("{}", run_moov_tree_cases());
+            ExitCode::SUCCESS
+        }
+        Some("moov-tree-cases") if args.len() == 3 && args[2] == "--moonbit" => {
+            print!("{}", moov_tree_moonbit_cases());
+            ExitCode::SUCCESS
+        }
+        Some("moov-tree-fixtures") if args.len() == 3 && args[2] == "--moonbit" => {
+            print!("{}", moov_tree_moonbit_fixtures());
+            ExitCode::SUCCESS
+        }
         _ => {
             eprintln!("usage: mp4-oracle demux <mp4-file>");
             eprintln!("       mp4-oracle box-headers");
@@ -85,6 +110,10 @@ fn main() -> ExitCode {
             eprintln!("       mp4-oracle box-tree-cases");
             eprintln!("       mp4-oracle box-tree-cases --moonbit");
             eprintln!("       mp4-oracle box-tree-fixtures --moonbit");
+            eprintln!("       mp4-oracle moov-tree <mp4-file>");
+            eprintln!("       mp4-oracle moov-tree-cases");
+            eprintln!("       mp4-oracle moov-tree-cases --moonbit");
+            eprintln!("       mp4-oracle moov-tree-fixtures --moonbit");
             ExitCode::from(2)
         }
     }
@@ -1147,6 +1176,1462 @@ fn box_tree_moonbit_fixtures() -> String {
     out
 }
 
+/// Extracts one top-level box (header + payload) from a whole file.
+///
+/// Used by the `moov-tree` fixture generation to embed only the `moov` box of
+/// the checked-in mp4 fixtures. Returns the upstream error kind/reason when
+/// the file itself cannot be scanned, and `invalid_data`/`<type> box not
+/// found` when the wanted box is absent.
+fn extract_top_level_box(
+    data: &[u8],
+    wanted: &[u8; 4],
+) -> Result<Vec<u8>, (&'static str, String)> {
+    let mut rest = data;
+    while !rest.is_empty() {
+        let (header, payload) = BoxHeader::decode_header_and_payload(rest)
+            .map_err(|e| (error_kind_str(e.kind), e.reason))?;
+        let total = header.external_size() + payload.len();
+        if header.box_type.as_bytes() == &wanted[..] {
+            return Ok(rest[..total].to_vec());
+        }
+        rest = &rest[total..];
+    }
+    Err((
+        "invalid_data",
+        format!("{} box not found", String::from_utf8_lossy(wanted)),
+    ))
+}
+
+/// One decoded moov tree observation: the frozen snapshot lines or the
+/// upstream error that stopped the decode.
+enum MoovTreeOutcome {
+    Ok(Vec<String>),
+    Err { kind: &'static str, reason: String },
+}
+
+fn moov_tree_outcome(input: &[u8]) -> MoovTreeOutcome {
+    match MoovBox::decode(input) {
+        Ok((moov, _)) => MoovTreeOutcome::Ok(moov_snapshot(&moov)),
+        Err(error) => MoovTreeOutcome::Err {
+            kind: error_kind_str(error.kind),
+            reason: error.reason,
+        },
+    }
+}
+
+fn bool_str(value: bool) -> &'static str {
+    if value {
+        "true"
+    } else {
+        "false"
+    }
+}
+
+fn lang_str(code: LanguageCode) -> String {
+    String::from_utf8_lossy(&code.as_bytes()).into_owned()
+}
+
+fn handler_str(code: [u8; 4]) -> String {
+    String::from_utf8_lossy(&code).into_owned()
+}
+
+fn matrix_str(matrix: &[i32; 9]) -> String {
+    matrix
+        .iter()
+        .map(i32::to_string)
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn hex_16_16(value: &FixedPointNumber<i16, u16>) -> String {
+    let mut bytes = Vec::with_capacity(4);
+    bytes.extend_from_slice(&value.integer.to_be_bytes());
+    bytes.extend_from_slice(&value.fraction.to_be_bytes());
+    hex(&bytes)
+}
+
+fn hex_8_8(value: &FixedPointNumber<i8, u8>) -> String {
+    hex(&[value.integer as u8, value.fraction])
+}
+
+fn hex_8_8_unsigned(value: &FixedPointNumber<u8, u8>) -> String {
+    hex(&[value.integer, value.fraction])
+}
+
+fn hex_media_rate(value: &FixedPointNumber<i16, i16>) -> String {
+    let mut bytes = Vec::with_capacity(4);
+    bytes.extend_from_slice(&value.integer.to_be_bytes());
+    bytes.extend_from_slice(&value.fraction.to_be_bytes());
+    hex(&bytes)
+}
+
+/// Builds the flat `path=value` snapshot for a decoded `MoovBox`.
+///
+/// The line list is frozen by issue 0008 and must match `moov_snapshot` in
+/// `src/boxes/moov_tree_oracle_test.mbt` line for line. 64-bit values are
+/// decimal; raw field bytes are lowercase hex; fourcc/language values are the
+/// raw characters.
+fn moov_snapshot(moov: &MoovBox) -> Vec<String> {
+    let mut lines = Vec::new();
+    let mvhd = &moov.mvhd_box;
+    lines.push(format!(
+        "moov.mvhd.creation_time={}",
+        mvhd.creation_time.as_secs()
+    ));
+    lines.push(format!(
+        "moov.mvhd.modification_time={}",
+        mvhd.modification_time.as_secs()
+    ));
+    lines.push(format!("moov.mvhd.timescale={}", mvhd.timescale.get()));
+    lines.push(format!("moov.mvhd.duration={}", mvhd.duration));
+    lines.push(format!("moov.mvhd.rate_hex={}", hex_16_16(&mvhd.rate)));
+    lines.push(format!("moov.mvhd.volume_hex={}", hex_8_8(&mvhd.volume)));
+    lines.push(format!("moov.mvhd.matrix={}", matrix_str(&mvhd.matrix)));
+    lines.push(format!("moov.mvhd.next_track_id={}", mvhd.next_track_id));
+    lines.push(format!("moov.trak_count={}", moov.trak_boxes.len()));
+
+    for (i, trak) in moov.trak_boxes.iter().enumerate() {
+        let tkhd = &trak.tkhd_box;
+        lines.push(format!(
+            "trak[{i}].tkhd.enabled={}",
+            bool_str(tkhd.flag_track_enabled)
+        ));
+        lines.push(format!(
+            "trak[{i}].tkhd.in_movie={}",
+            bool_str(tkhd.flag_track_in_movie)
+        ));
+        lines.push(format!(
+            "trak[{i}].tkhd.in_preview={}",
+            bool_str(tkhd.flag_track_in_preview)
+        ));
+        lines.push(format!(
+            "trak[{i}].tkhd.size_is_aspect_ratio={}",
+            bool_str(tkhd.flag_track_size_is_aspect_ratio)
+        ));
+        lines.push(format!(
+            "trak[{i}].tkhd.creation_time={}",
+            tkhd.creation_time.as_secs()
+        ));
+        lines.push(format!(
+            "trak[{i}].tkhd.modification_time={}",
+            tkhd.modification_time.as_secs()
+        ));
+        lines.push(format!("trak[{i}].tkhd.track_id={}", tkhd.track_id));
+        lines.push(format!("trak[{i}].tkhd.duration={}", tkhd.duration));
+        lines.push(format!("trak[{i}].tkhd.layer={}", tkhd.layer));
+        lines.push(format!(
+            "trak[{i}].tkhd.alternate_group={}",
+            tkhd.alternate_group
+        ));
+        lines.push(format!("trak[{i}].tkhd.volume_hex={}", hex_8_8(&tkhd.volume)));
+        lines.push(format!("trak[{i}].tkhd.matrix={}", matrix_str(&tkhd.matrix)));
+        lines.push(format!("trak[{i}].tkhd.width_hex={}", hex_16_16(&tkhd.width)));
+        lines.push(format!(
+            "trak[{i}].tkhd.height_hex={}",
+            hex_16_16(&tkhd.height)
+        ));
+
+        lines.push(format!(
+            "trak[{i}].edts.present={}",
+            bool_str(trak.edts_box.is_some())
+        ));
+        if let Some(edts) = &trak.edts_box {
+            lines.push(format!(
+                "trak[{i}].edts.elst_count={}",
+                edts.elst_box.as_ref().map(|e| e.entries.len()).unwrap_or(0)
+            ));
+            if let Some(elst) = &edts.elst_box {
+                for (j, entry) in elst.entries.iter().enumerate() {
+                    lines.push(format!(
+                        "trak[{i}].edts.elst[{j}].edit_duration={}",
+                        entry.edit_duration
+                    ));
+                    lines.push(format!(
+                        "trak[{i}].edts.elst[{j}].media_time={}",
+                        entry.media_time
+                    ));
+                    lines.push(format!(
+                        "trak[{i}].edts.elst[{j}].media_rate_hex={}",
+                        hex_media_rate(&entry.media_rate)
+                    ));
+                }
+            }
+        }
+
+        let mdia = &trak.mdia_box;
+        let mdhd = &mdia.mdhd_box;
+        lines.push(format!(
+            "trak[{i}].mdia.mdhd.creation_time={}",
+            mdhd.creation_time.as_secs()
+        ));
+        lines.push(format!(
+            "trak[{i}].mdia.mdhd.modification_time={}",
+            mdhd.modification_time.as_secs()
+        ));
+        lines.push(format!(
+            "trak[{i}].mdia.mdhd.timescale={}",
+            mdhd.timescale.get()
+        ));
+        lines.push(format!("trak[{i}].mdia.mdhd.duration={}", mdhd.duration));
+        lines.push(format!(
+            "trak[{i}].mdia.mdhd.language={}",
+            lang_str(mdhd.language)
+        ));
+        lines.push(format!(
+            "trak[{i}].mdia.hdlr.handler_type={}",
+            handler_str(mdia.hdlr_box.handler_type)
+        ));
+        lines.push(format!(
+            "trak[{i}].mdia.hdlr.name_hex={}",
+            hex(&mdia.hdlr_box.name)
+        ));
+
+        let minf = &mdia.minf_box;
+        match &minf.media_header {
+            None => lines.push(format!("trak[{i}].mdia.minf.media_header.type=none")),
+            Some(MediaHeader::Smhd(b)) => {
+                lines.push(format!("trak[{i}].mdia.minf.media_header.type=smhd"));
+                lines.push(format!(
+                    "trak[{i}].mdia.minf.media_header.balance_hex={}",
+                    hex_8_8_unsigned(&b.balance)
+                ));
+            }
+            Some(MediaHeader::Vmhd(b)) => {
+                lines.push(format!("trak[{i}].mdia.minf.media_header.type=vmhd"));
+                lines.push(format!(
+                    "trak[{i}].mdia.minf.media_header.opcolor={},{},{}",
+                    b.opcolor[0], b.opcolor[1], b.opcolor[2]
+                ));
+            }
+            Some(MediaHeader::Sthd(_)) => {
+                lines.push(format!("trak[{i}].mdia.minf.media_header.type=sthd"));
+            }
+            Some(MediaHeader::Nmhd(_)) => {
+                lines.push(format!("trak[{i}].mdia.minf.media_header.type=nmhd"));
+            }
+        }
+
+        match &minf.dinf_box.dref_box.url_box {
+            None => lines.push(format!("trak[{i}].mdia.minf.dinf.dref.url.present=false")),
+            Some(url) => {
+                lines.push(format!("trak[{i}].mdia.minf.dinf.dref.url.present=true"));
+                let self_contained = url.location.is_none();
+                lines.push(format!(
+                    "trak[{i}].mdia.minf.dinf.dref.url.self_contained={}",
+                    bool_str(self_contained)
+                ));
+                lines.push(format!(
+                    "trak[{i}].mdia.minf.dinf.dref.url.location_none={}",
+                    bool_str(self_contained)
+                ));
+                if let Some(location) = &url.location {
+                    lines.push(format!(
+                        "trak[{i}].mdia.minf.dinf.dref.url.location={}",
+                        location.get()
+                    ));
+                }
+            }
+        }
+    }
+    lines
+}
+
+fn snapshot_json(lines: &[String]) -> String {
+    let items: Vec<String> = lines.iter().map(|line| json_string_to(line)).collect();
+    format!("[{}]", items.join(", "))
+}
+
+fn moov_tree_json(input: &[u8]) -> String {
+    match moov_tree_outcome(input) {
+        MoovTreeOutcome::Ok(snapshot) => format!(
+            "{{\"status\": \"ok\", \"snapshot\": {}}}",
+            snapshot_json(&snapshot)
+        ),
+        MoovTreeOutcome::Err { kind, reason } => format!(
+            "{{\"status\": \"error\", \"error_kind\": \"{kind}\", \"reason\": {}}}",
+            json_string_to(&reason)
+        ),
+    }
+}
+
+/// Runs the `moov` decode over a whole file, extracting the top-level box.
+fn moov_tree_json_for_file(data: &[u8]) -> String {
+    match extract_top_level_box(data, b"moov") {
+        Ok(moov) => moov_tree_json(&moov),
+        Err((kind, reason)) => format!(
+            "{{\"status\": \"error\", \"error_kind\": \"{kind}\", \"reason\": {}}}",
+            json_string_to(&reason)
+        ),
+    }
+}
+
+/// Runs the `moov` tree snapshot over a whole mp4 file and prints the golden
+/// JSON.
+fn run_moov_tree(path: &str) -> Result<String, String> {
+    let data = fs::read(path).map_err(|e| format!("failed to read {path}: {e}"))?;
+    let name = Path::new(path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("unknown")
+        .to_owned();
+
+    let mut input = String::from("{");
+    input.push_str("\"name\": ");
+    json_string(&name, &mut input);
+    let _ = write!(input, ", \"size\": \"{}\", \"sha256\": ", data.len());
+    json_string(&sha256_hex(&data), &mut input);
+    input.push('}');
+
+    let parts = [
+        format!("  \"schema_version\": {SCHEMA_VERSION}"),
+        format!("  \"upstream_sha\": \"{UPSTREAM_SHA}\""),
+        format!("  \"input\": {input}"),
+        format!("  \"moov_tree\": {}", moov_tree_json_for_file(&data)),
+    ];
+    Ok(format!("{{\n{}\n}}\n", parts.join(",\n")))
+}
+
+/// Fixed whole-`moov`-box case table shared with the MoonBit differential
+/// test (`src/boxes/moov_tree_oracle_test.mbt`).
+///
+/// Success cases always contain a minimal valid `stbl` because the upstream
+/// `MinfBox` requires it; issue 0008 does not type `stbl` on the MoonBit side
+/// yet (see docs/upstream.md).
+///
+/// Changing this table changes the generated MoonBit case file; regenerate it
+/// with:
+///   (cd tools/oracle && cargo run -- moov-tree-cases --moonbit) \
+///     > src/boxes/moov_tree_oracle_cases_test.mbt
+fn moov_tree_cases() -> Vec<(&'static str, Vec<u8>)> {
+    const DEFAULT_MATRIX: [i32; 9] = [0x00010000, 0, 0, 0, 0x00010000, 0, 0, 0, 0x40000000];
+
+    fn raw_box(box_type: &[u8; 4], payload: &[u8]) -> Vec<u8> {
+        let mut out = Vec::with_capacity(8 + payload.len());
+        out.extend_from_slice(&((8 + payload.len()) as u32).to_be_bytes());
+        out.extend_from_slice(box_type);
+        out.extend_from_slice(payload);
+        out
+    }
+
+    fn full_box(box_type: &[u8; 4], version: u8, flags: u32, body: &[u8]) -> Vec<u8> {
+        let mut payload = Vec::with_capacity(4 + body.len());
+        payload.push(version);
+        payload.extend_from_slice(&(flags & 0x00FF_FFFF).to_be_bytes()[1..]);
+        payload.extend_from_slice(body);
+        raw_box(box_type, &payload)
+    }
+
+    fn mvhd_box(
+        v1: bool,
+        creation_time: u64,
+        modification_time: u64,
+        timescale: u32,
+        duration: u64,
+        rate: (i16, u16),
+        volume: (i8, u8),
+        next_track_id: u32,
+    ) -> Vec<u8> {
+        let mut body = Vec::new();
+        if v1 {
+            body.extend_from_slice(&creation_time.to_be_bytes());
+            body.extend_from_slice(&modification_time.to_be_bytes());
+            body.extend_from_slice(&timescale.to_be_bytes());
+            body.extend_from_slice(&duration.to_be_bytes());
+        } else {
+            body.extend_from_slice(&(creation_time as u32).to_be_bytes());
+            body.extend_from_slice(&(modification_time as u32).to_be_bytes());
+            body.extend_from_slice(&timescale.to_be_bytes());
+            body.extend_from_slice(&(duration as u32).to_be_bytes());
+        }
+        body.extend_from_slice(&rate.0.to_be_bytes());
+        body.extend_from_slice(&rate.1.to_be_bytes());
+        body.extend_from_slice(&[volume.0 as u8, volume.1]);
+        body.extend_from_slice(&[0u8; 2 + 8]);
+        for value in DEFAULT_MATRIX {
+            body.extend_from_slice(&value.to_be_bytes());
+        }
+        body.extend_from_slice(&[0u8; 4 * 6]);
+        body.extend_from_slice(&next_track_id.to_be_bytes());
+        full_box(b"mvhd", u8::from(v1), 0, &body)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn tkhd_box(
+        v1: bool,
+        flags: u32,
+        creation_time: u64,
+        modification_time: u64,
+        track_id: u32,
+        duration: u64,
+        layer: i16,
+        alternate_group: i16,
+        volume: (i8, u8),
+        width: (i16, u16),
+        height: (i16, u16),
+    ) -> Vec<u8> {
+        let mut body = Vec::new();
+        if v1 {
+            body.extend_from_slice(&creation_time.to_be_bytes());
+            body.extend_from_slice(&modification_time.to_be_bytes());
+        } else {
+            body.extend_from_slice(&(creation_time as u32).to_be_bytes());
+            body.extend_from_slice(&(modification_time as u32).to_be_bytes());
+        }
+        body.extend_from_slice(&track_id.to_be_bytes());
+        body.extend_from_slice(&[0u8; 4]);
+        if v1 {
+            body.extend_from_slice(&duration.to_be_bytes());
+        } else {
+            body.extend_from_slice(&(duration as u32).to_be_bytes());
+        }
+        body.extend_from_slice(&[0u8; 4 * 2]);
+        body.extend_from_slice(&layer.to_be_bytes());
+        body.extend_from_slice(&alternate_group.to_be_bytes());
+        body.extend_from_slice(&[volume.0 as u8, volume.1]);
+        body.extend_from_slice(&[0u8; 2]);
+        for value in DEFAULT_MATRIX {
+            body.extend_from_slice(&value.to_be_bytes());
+        }
+        body.extend_from_slice(&width.0.to_be_bytes());
+        body.extend_from_slice(&width.1.to_be_bytes());
+        body.extend_from_slice(&height.0.to_be_bytes());
+        body.extend_from_slice(&height.1.to_be_bytes());
+        full_box(b"tkhd", u8::from(v1), flags, &body)
+    }
+
+    fn pack_language(code: &[u8; 3]) -> u16 {
+        let mut packed: u16 = 0;
+        for &byte in code {
+            packed = (packed << 5) | u16::from(byte - 0x60);
+        }
+        packed
+    }
+
+    fn mdhd_box(
+        v1: bool,
+        creation_time: u64,
+        modification_time: u64,
+        timescale: u32,
+        duration: u64,
+        language: &[u8; 3],
+    ) -> Vec<u8> {
+        let mut body = Vec::new();
+        if v1 {
+            body.extend_from_slice(&creation_time.to_be_bytes());
+            body.extend_from_slice(&modification_time.to_be_bytes());
+            body.extend_from_slice(&timescale.to_be_bytes());
+            body.extend_from_slice(&duration.to_be_bytes());
+        } else {
+            body.extend_from_slice(&(creation_time as u32).to_be_bytes());
+            body.extend_from_slice(&(modification_time as u32).to_be_bytes());
+            body.extend_from_slice(&timescale.to_be_bytes());
+            body.extend_from_slice(&(duration as u32).to_be_bytes());
+        }
+        body.extend_from_slice(&pack_language(language).to_be_bytes());
+        body.extend_from_slice(&[0u8; 2]);
+        full_box(b"mdhd", u8::from(v1), 0, &body)
+    }
+
+    fn hdlr_box(handler_type: &[u8; 4], name: &[u8]) -> Vec<u8> {
+        let mut body = Vec::new();
+        body.extend_from_slice(&[0u8; 4]);
+        body.extend_from_slice(handler_type);
+        body.extend_from_slice(&[0u8; 4 * 3]);
+        body.extend_from_slice(name);
+        full_box(b"hdlr", 0, 0, &body)
+    }
+
+    fn elst_box(v1: bool, entries: &[(u64, i64)]) -> Vec<u8> {
+        let mut body = Vec::new();
+        body.extend_from_slice(&(entries.len() as u32).to_be_bytes());
+        for (edit_duration, media_time) in entries {
+            if v1 {
+                body.extend_from_slice(&edit_duration.to_be_bytes());
+                body.extend_from_slice(&media_time.to_be_bytes());
+            } else {
+                body.extend_from_slice(&(*edit_duration as u32).to_be_bytes());
+                body.extend_from_slice(&(*media_time as i32).to_be_bytes());
+            }
+            body.extend_from_slice(&1i16.to_be_bytes());
+            body.extend_from_slice(&0i16.to_be_bytes());
+        }
+        full_box(b"elst", u8::from(v1), 0, &body)
+    }
+
+    fn edts_box(elst: Option<Vec<u8>>) -> Vec<u8> {
+        let mut payload = Vec::new();
+        if let Some(elst) = elst {
+            payload.extend(elst);
+        }
+        raw_box(b"edts", &payload)
+    }
+
+    fn url_box(self_contained: bool, location: Option<&str>) -> Vec<u8> {
+        let mut body = Vec::new();
+        if let Some(location) = location {
+            body.extend_from_slice(location.as_bytes());
+            body.push(0);
+        }
+        full_box(b"url ", 0, u32::from(self_contained), &body)
+    }
+
+    fn url_box_raw(flags: u32, body: &[u8]) -> Vec<u8> {
+        full_box(b"url ", 0, flags, body)
+    }
+
+    fn dref_box(entries: &[Vec<u8>]) -> Vec<u8> {
+        let mut body = Vec::new();
+        body.extend_from_slice(&(entries.len() as u32).to_be_bytes());
+        for entry in entries {
+            body.extend_from_slice(entry);
+        }
+        full_box(b"dref", 0, 0, &body)
+    }
+
+    fn dinf_local_file() -> Vec<u8> {
+        raw_box(b"dinf", &dref_box(&[url_box(true, None)]))
+    }
+
+    fn vmhd_box(graphicsmode: u16, opcolor: [u16; 3]) -> Vec<u8> {
+        let mut body = Vec::new();
+        body.extend_from_slice(&graphicsmode.to_be_bytes());
+        for value in opcolor {
+            body.extend_from_slice(&value.to_be_bytes());
+        }
+        full_box(b"vmhd", 0, 1, &body)
+    }
+
+    fn smhd_box(balance: (u8, u8)) -> Vec<u8> {
+        full_box(b"smhd", 0, 0, &[balance.0, balance.1, 0, 0])
+    }
+
+    fn sthd_box() -> Vec<u8> {
+        full_box(b"sthd", 0, 0, &[])
+    }
+
+    fn nmhd_box() -> Vec<u8> {
+        full_box(b"nmhd", 0, 0, &[])
+    }
+
+    /// Minimal `stbl` accepted by the upstream sample-table decoder
+    /// (empty `stsd`/`stts`/`stsc`/`stsz`/`stco`).
+    fn stbl_min() -> Vec<u8> {
+        let mut payload = Vec::new();
+        payload.extend_from_slice(&raw_box(b"stsd", &[0u8; 8]));
+        payload.extend_from_slice(&raw_box(b"stts", &[0u8; 8]));
+        payload.extend_from_slice(&raw_box(b"stsc", &[0u8; 8]));
+        payload.extend_from_slice(&raw_box(b"stsz", &[0u8; 12]));
+        payload.extend_from_slice(&raw_box(b"stco", &[0u8; 8]));
+        raw_box(b"stbl", &payload)
+    }
+
+    fn minf_box(
+        media_header: Option<Vec<u8>>,
+        dinf: Option<Vec<u8>>,
+        stbl: Option<Vec<u8>>,
+        extras: &[Vec<u8>],
+    ) -> Vec<u8> {
+        let mut payload = Vec::new();
+        if let Some(media_header) = media_header {
+            payload.extend(media_header);
+        }
+        if let Some(dinf) = dinf {
+            payload.extend(dinf);
+        }
+        if let Some(stbl) = stbl {
+            payload.extend(stbl);
+        }
+        for extra in extras {
+            payload.extend_from_slice(extra);
+        }
+        raw_box(b"minf", &payload)
+    }
+
+    fn mdia_box(
+        mdhd: Option<Vec<u8>>,
+        hdlr: Option<Vec<u8>>,
+        minf: Option<Vec<u8>>,
+        extras: &[Vec<u8>],
+    ) -> Vec<u8> {
+        let mut payload = Vec::new();
+        if let Some(mdhd) = mdhd {
+            payload.extend(mdhd);
+        }
+        if let Some(hdlr) = hdlr {
+            payload.extend(hdlr);
+        }
+        if let Some(minf) = minf {
+            payload.extend(minf);
+        }
+        for extra in extras {
+            payload.extend_from_slice(extra);
+        }
+        raw_box(b"mdia", &payload)
+    }
+
+    fn trak_box(
+        tkhd: Option<Vec<u8>>,
+        edts: Option<Vec<u8>>,
+        mdia: Option<Vec<u8>>,
+        extras: &[Vec<u8>],
+    ) -> Vec<u8> {
+        let mut payload = Vec::new();
+        if let Some(tkhd) = tkhd {
+            payload.extend(tkhd);
+        }
+        if let Some(edts) = edts {
+            payload.extend(edts);
+        }
+        if let Some(mdia) = mdia {
+            payload.extend(mdia);
+        }
+        for extra in extras {
+            payload.extend_from_slice(extra);
+        }
+        raw_box(b"trak", &payload)
+    }
+
+    fn moov_box(mvhd: Option<Vec<u8>>, traks: &[Vec<u8>], extras: &[Vec<u8>]) -> Vec<u8> {
+        let mut payload = Vec::new();
+        if let Some(mvhd) = mvhd {
+            payload.extend(mvhd);
+        }
+        for trak in traks {
+            payload.extend_from_slice(trak);
+        }
+        for extra in extras {
+            payload.extend_from_slice(extra);
+        }
+        raw_box(b"moov", &payload)
+    }
+
+    let mvhd_v0 = |duration: u64| {
+        mvhd_box(false, 0, 0, 1000, duration, (1, 0), (1, 0), 1)
+    };
+    let mvhd_v1 = || {
+        mvhd_box(
+            true,
+            4_294_967_296,
+            4_294_967_297,
+            1000,
+            4_294_967_298,
+            (1, 0),
+            (1, 0),
+            2,
+        )
+    };
+
+    let video_mdia = |media_header: Vec<u8>| {
+        mdia_box(
+            Some(mdhd_box(false, 0, 0, 12800, 25600, b"eng")),
+            Some(hdlr_box(b"vide", b"VideoHandler")),
+            Some(minf_box(
+                Some(media_header),
+                Some(dinf_local_file()),
+                Some(stbl_min()),
+                &[],
+            )),
+            &[],
+        )
+    };
+    let video_tkhd = |flags: u32| {
+        tkhd_box(
+            false,
+            flags,
+            0,
+            0,
+            1,
+            1000,
+            0,
+            0,
+            (0, 0),
+            (1920, 0),
+            (1080, 0),
+        )
+    };
+
+    let mut cases: Vec<(&'static str, Vec<u8>)> = Vec::new();
+    cases.push(("minimal_v0", moov_box(Some(mvhd_v0(2000)), &[], &[])));
+    cases.push(("minimal_v1", moov_box(Some(mvhd_v1()), &[], &[])));
+    cases.push((
+        "zero_tracks_unknown_extras",
+        moov_box(
+            Some(mvhd_v0(2000)),
+            &[],
+            &[
+                raw_box(b"mvex", &[]),
+                raw_box(b"zzzz", &[0xAA]),
+                raw_box(b"free", &[0, 1, 2, 3]),
+            ],
+        ),
+    ));
+    cases.push((
+        "video_track_vmhd",
+        moov_box(
+            Some(mvhd_v0(2000)),
+            &[trak_box(
+                Some(video_tkhd(0b11)),
+                None,
+                Some(video_mdia(vmhd_box(64, [0x1000, 0x8000, 0xFFFF]))),
+                &[raw_box(b"zzzz", &[0xAA, 0xBB])],
+            )],
+            &[],
+        ),
+    ));
+    cases.push((
+        "audio_track_smhd",
+        moov_box(
+            Some(mvhd_v0(2000)),
+            &[trak_box(
+                Some(tkhd_box(
+                    false,
+                    0b1,
+                    0,
+                    0,
+                    2,
+                    1000,
+                    0,
+                    0,
+                    (1, 0),
+                    (0, 0),
+                    (0, 0),
+                )),
+                None,
+                Some(mdia_box(
+                    Some(mdhd_box(false, 0, 0, 44100, 88200, b"jpn")),
+                    Some(hdlr_box(b"soun", b"SoundHandler")),
+                    Some(minf_box(
+                        Some(smhd_box((0, 0x80))),
+                        Some(dinf_local_file()),
+                        Some(stbl_min()),
+                        &[],
+                    )),
+                    &[],
+                )),
+                &[],
+            )],
+            &[],
+        ),
+    ));
+    cases.push((
+        "subtitle_track_sthd",
+        moov_box(
+            Some(mvhd_v0(2000)),
+            &[trak_box(
+                Some(tkhd_box(
+                    false,
+                    0b1,
+                    0,
+                    0,
+                    3,
+                    1000,
+                    0,
+                    0,
+                    (0, 0),
+                    (0, 0),
+                    (0, 0),
+                )),
+                None,
+                Some(mdia_box(
+                    Some(mdhd_box(false, 0, 0, 1000, 1000, b"und")),
+                    Some(hdlr_box(b"subt", b"")),
+                    Some(minf_box(
+                        Some(sthd_box()),
+                        Some(dinf_local_file()),
+                        Some(stbl_min()),
+                        &[],
+                    )),
+                    &[],
+                )),
+                &[],
+            )],
+            &[],
+        ),
+    ));
+    cases.push((
+        "text_track_nmhd",
+        moov_box(
+            Some(mvhd_v0(2000)),
+            &[trak_box(
+                Some(tkhd_box(
+                    false,
+                    0b1,
+                    0,
+                    0,
+                    4,
+                    1000,
+                    0,
+                    0,
+                    (0, 0),
+                    (0, 0),
+                    (0, 0),
+                )),
+                None,
+                Some(mdia_box(
+                    Some(mdhd_box(false, 0, 0, 1000, 1000, b"und")),
+                    Some(hdlr_box(b"text", b"")),
+                    Some(minf_box(
+                        Some(nmhd_box()),
+                        Some(dinf_local_file()),
+                        Some(stbl_min()),
+                        &[],
+                    )),
+                    &[],
+                )),
+                &[],
+            )],
+            &[],
+        ),
+    ));
+    cases.push((
+        "media_header_none",
+        moov_box(
+            Some(mvhd_v0(2000)),
+            &[trak_box(
+                Some(video_tkhd(0b1)),
+                None,
+                Some(mdia_box(
+                    Some(mdhd_box(false, 0, 0, 12800, 25600, b"eng")),
+                    Some(hdlr_box(b"vide", b"")),
+                    Some(minf_box(
+                        None,
+                        Some(dinf_local_file()),
+                        Some(stbl_min()),
+                        &[],
+                    )),
+                    &[],
+                )),
+                &[],
+            )],
+            &[],
+        ),
+    ));
+    cases.push((
+        "two_tracks_mixed_versions",
+        moov_box(
+            Some(mvhd_v1()),
+            &[
+                trak_box(
+                    Some(video_tkhd(0b11)),
+                    Some(edts_box(Some(elst_box(false, &[(100, 0)])))),
+                    Some(video_mdia(vmhd_box(0, [0, 0, 0]))),
+                    &[],
+                ),
+                trak_box(
+                    Some(tkhd_box(
+                        true,
+                        0b1,
+                        4_294_967_296,
+                        4_294_967_297,
+                        2,
+                        4_294_967_298,
+                        -1,
+                        -2,
+                        (1, 0x80),
+                        (1920, 0x8000),
+                        (1080, 0x4000),
+                    )),
+                    Some(edts_box(Some(elst_box(true, &[(4_294_967_297, -1)])))),
+                    Some(mdia_box(
+                        Some(mdhd_box(
+                            true,
+                            4_294_967_296,
+                            4_294_967_297,
+                            44100,
+                            4_294_967_298,
+                            b"jpn",
+                        )),
+                        Some(hdlr_box(b"soun", b"SoundHandler")),
+                        Some(minf_box(
+                            Some(smhd_box((0, 0x80))),
+                            Some(dinf_local_file()),
+                            Some(stbl_min()),
+                            &[],
+                        )),
+                        &[],
+                    )),
+                    &[],
+                ),
+            ],
+            &[],
+        ),
+    ));
+    cases.push((
+        "edts_without_elst",
+        moov_box(
+            Some(mvhd_v0(2000)),
+            &[trak_box(
+                Some(video_tkhd(0b11)),
+                Some(edts_box(None)),
+                Some(video_mdia(vmhd_box(0, [0, 0, 0]))),
+                &[],
+            )],
+            &[],
+        ),
+    ));
+    cases.push((
+        "elst_empty_v0",
+        moov_box(
+            Some(mvhd_v0(2000)),
+            &[trak_box(
+                Some(video_tkhd(0b11)),
+                Some(edts_box(Some(elst_box(false, &[])))),
+                Some(video_mdia(vmhd_box(0, [0, 0, 0]))),
+                &[],
+            )],
+            &[],
+        ),
+    ));
+    let dinf_url_location =
+        raw_box(b"dinf", &dref_box(&[url_box(false, Some("https://example.com/media"))]));
+    cases.push((
+        "url_location",
+        moov_box(
+            Some(mvhd_v0(2000)),
+            &[trak_box(
+                Some(video_tkhd(0b11)),
+                None,
+                Some(mdia_box(
+                    Some(mdhd_box(false, 0, 0, 12800, 25600, b"eng")),
+                    Some(hdlr_box(b"vide", b"")),
+                    Some(minf_box(
+                        Some(vmhd_box(0, [0, 0, 0])),
+                        Some(dinf_url_location.clone()),
+                        Some(stbl_min()),
+                        &[],
+                    )),
+                    &[],
+                )),
+                &[],
+            )],
+            &[],
+        ),
+    ));
+    let dinf_url_self_contained =
+        raw_box(b"dinf", &dref_box(&[url_box_raw(1, b"ignored\x00")]));
+    cases.push((
+        "url_self_contained",
+        moov_box(
+            Some(mvhd_v0(2000)),
+            &[trak_box(
+                Some(video_tkhd(0b11)),
+                None,
+                Some(mdia_box(
+                    Some(mdhd_box(false, 0, 0, 12800, 25600, b"eng")),
+                    Some(hdlr_box(b"vide", b"")),
+                    Some(minf_box(
+                        Some(vmhd_box(0, [0, 0, 0])),
+                        Some(dinf_url_self_contained),
+                        Some(stbl_min()),
+                        &[],
+                    )),
+                    &[],
+                )),
+                &[],
+            )],
+            &[],
+        ),
+    ));
+    let url_case = |raw_url: Vec<u8>| {
+        moov_box(
+            Some(mvhd_v0(2000)),
+            &[trak_box(
+                Some(video_tkhd(0b11)),
+                None,
+                Some(mdia_box(
+                    Some(mdhd_box(false, 0, 0, 12800, 25600, b"eng")),
+                    Some(hdlr_box(b"vide", b"")),
+                    Some(minf_box(
+                        Some(vmhd_box(0, [0, 0, 0])),
+                        Some(raw_box(b"dinf", &dref_box(&[raw_url]))),
+                        Some(stbl_min()),
+                        &[],
+                    )),
+                    &[],
+                )),
+                &[],
+            )],
+            &[],
+        )
+    };
+    cases.push(("url_missing_nul", url_case(url_box_raw(0, b"abc"))));
+    cases.push((
+        "url_invalid_utf8",
+        url_case(url_box_raw(0, &[0xFF, 0xFE, 0x00])),
+    ));
+    cases.push(("missing_mvhd", moov_box(None, &[], &[])));
+    cases.push((
+        "missing_tkhd",
+        moov_box(
+            Some(mvhd_v0(2000)),
+            &[trak_box(
+                None,
+                None,
+                Some(video_mdia(vmhd_box(0, [0, 0, 0]))),
+                &[],
+            )],
+            &[],
+        ),
+    ));
+    cases.push((
+        "missing_mdia",
+        moov_box(
+            Some(mvhd_v0(2000)),
+            &[trak_box(Some(video_tkhd(0b11)), None, None, &[])],
+            &[],
+        ),
+    ));
+    cases.push((
+        "missing_mdhd",
+        moov_box(
+            Some(mvhd_v0(2000)),
+            &[trak_box(
+                Some(video_tkhd(0b11)),
+                None,
+                Some(mdia_box(
+                    None,
+                    Some(hdlr_box(b"vide", b"")),
+                    Some(minf_box(
+                        Some(vmhd_box(0, [0, 0, 0])),
+                        Some(dinf_local_file()),
+                        Some(stbl_min()),
+                        &[],
+                    )),
+                    &[],
+                )),
+                &[],
+            )],
+            &[],
+        ),
+    ));
+    cases.push((
+        "missing_hdlr",
+        moov_box(
+            Some(mvhd_v0(2000)),
+            &[trak_box(
+                Some(video_tkhd(0b11)),
+                None,
+                Some(mdia_box(
+                    Some(mdhd_box(false, 0, 0, 12800, 25600, b"eng")),
+                    None,
+                    Some(minf_box(
+                        Some(vmhd_box(0, [0, 0, 0])),
+                        Some(dinf_local_file()),
+                        Some(stbl_min()),
+                        &[],
+                    )),
+                    &[],
+                )),
+                &[],
+            )],
+            &[],
+        ),
+    ));
+    cases.push((
+        "missing_minf",
+        moov_box(
+            Some(mvhd_v0(2000)),
+            &[trak_box(
+                Some(video_tkhd(0b11)),
+                None,
+                Some(mdia_box(
+                    Some(mdhd_box(false, 0, 0, 12800, 25600, b"eng")),
+                    Some(hdlr_box(b"vide", b"")),
+                    None,
+                    &[],
+                )),
+                &[],
+            )],
+            &[],
+        ),
+    ));
+    cases.push((
+        "missing_dinf",
+        moov_box(
+            Some(mvhd_v0(2000)),
+            &[trak_box(
+                Some(video_tkhd(0b11)),
+                None,
+                Some(mdia_box(
+                    Some(mdhd_box(false, 0, 0, 12800, 25600, b"eng")),
+                    Some(hdlr_box(b"vide", b"")),
+                    Some(minf_box(
+                        Some(vmhd_box(0, [0, 0, 0])),
+                        None,
+                        Some(stbl_min()),
+                        &[],
+                    )),
+                    &[],
+                )),
+                &[],
+            )],
+            &[],
+        ),
+    ));
+    cases.push((
+        "missing_dref",
+        moov_box(
+            Some(mvhd_v0(2000)),
+            &[trak_box(
+                Some(video_tkhd(0b11)),
+                None,
+                Some(mdia_box(
+                    Some(mdhd_box(false, 0, 0, 12800, 25600, b"eng")),
+                    Some(hdlr_box(b"vide", b"")),
+                    Some(minf_box(
+                        Some(vmhd_box(0, [0, 0, 0])),
+                        Some(raw_box(b"dinf", &[])),
+                        Some(stbl_min()),
+                        &[],
+                    )),
+                    &[],
+                )),
+                &[],
+            )],
+            &[],
+        ),
+    ));
+    cases.push((
+        "mvhd_timescale_zero",
+        moov_box(
+            Some(mvhd_box(false, 0, 0, 0, 2000, (1, 0), (1, 0), 1)),
+            &[],
+            &[],
+        ),
+    ));
+    cases.push((
+        "mdhd_timescale_zero",
+        moov_box(
+            Some(mvhd_v0(2000)),
+            &[trak_box(
+                Some(video_tkhd(0b11)),
+                None,
+                Some(mdia_box(
+                    Some(mdhd_box(false, 0, 0, 0, 0, b"eng")),
+                    Some(hdlr_box(b"vide", b"")),
+                    Some(minf_box(
+                        Some(vmhd_box(0, [0, 0, 0])),
+                        Some(dinf_local_file()),
+                        Some(stbl_min()),
+                        &[],
+                    )),
+                    &[],
+                )),
+                &[],
+            )],
+            &[],
+        ),
+    ));
+    cases.push((
+        "duplicate_mvhd",
+        moov_box(
+            Some(mvhd_v0(2000)),
+            &[],
+            &[mvhd_box(false, 0, 0, 1000, 3000, (1, 0), (1, 0), 9)],
+        ),
+    ));
+    cases.push((
+        "duplicate_media_header",
+        moov_box(
+            Some(mvhd_v0(2000)),
+            &[trak_box(
+                Some(video_tkhd(0b11)),
+                None,
+                Some(mdia_box(
+                    Some(mdhd_box(false, 0, 0, 12800, 25600, b"eng")),
+                    Some(hdlr_box(b"vide", b"")),
+                    Some(minf_box(
+                        Some(vmhd_box(0, [0, 0, 0])),
+                        Some(dinf_local_file()),
+                        Some(stbl_min()),
+                        &[smhd_box((0, 0))],
+                    )),
+                    &[],
+                )),
+                &[],
+            )],
+            &[],
+        ),
+    ));
+    cases.push((
+        "hdlr_name_raw",
+        moov_box(
+            Some(mvhd_v0(2000)),
+            &[trak_box(
+                Some(video_tkhd(0b1)),
+                None,
+                Some(mdia_box(
+                    Some(mdhd_box(false, 0, 0, 1000, 1000, b"und")),
+                    Some(hdlr_box(b"zzzz", &[0x00, 0xFF, 0x61])),
+                    Some(minf_box(
+                        Some(vmhd_box(0, [0, 0, 0])),
+                        Some(dinf_local_file()),
+                        Some(stbl_min()),
+                        &[],
+                    )),
+                    &[],
+                )),
+                &[],
+            )],
+            &[],
+        ),
+    ));
+    cases.push((
+        "tkhd_flag_bits_and_fractions",
+        moov_box(
+            Some(mvhd_v0(2000)),
+            &[trak_box(
+                Some(tkhd_box(
+                    false,
+                    0b1111,
+                    0,
+                    0,
+                    7,
+                    1000,
+                    -1,
+                    -2,
+                    (0, 0x80),
+                    (1920, 0x8000),
+                    (1080, 0x4000),
+                )),
+                None,
+                Some(video_mdia(vmhd_box(0, [0, 0, 0]))),
+                &[],
+            )],
+            &[],
+        ),
+    ));
+    cases.push((
+        "truncated_child",
+        b"\x00\x00\x00\x10moov\x00\x00\x00\x14mvhd".to_vec(),
+    ));
+    cases.push((
+        "mvhd_short_payload",
+        moov_box(Some(raw_box(b"mvhd", &[0, 0, 0, 0])), &[], &[]),
+    ));
+    cases
+}
+
+/// Runs the fixed moov-tree case table and emits the normalised JSON.
+fn run_moov_tree_cases() -> String {
+    let cases = moov_tree_cases();
+    let mut items: Vec<String> = Vec::new();
+    for (name, input) in &cases {
+        let mut entry = format!("{{\"name\": \"{name}\", \"input\": \"{}\"", hex(input));
+        match moov_tree_outcome(input) {
+            MoovTreeOutcome::Ok(snapshot) => {
+                let _ = write!(
+                    entry,
+                    ", \"ok\": true, \"snapshot\": {}",
+                    snapshot_json(&snapshot)
+                );
+            }
+            MoovTreeOutcome::Err { kind, reason } => {
+                let _ = write!(
+                    entry,
+                    ", \"ok\": false, \"error_kind\": \"{kind}\", \"reason\": {}",
+                    json_string_to(&reason)
+                );
+            }
+        }
+        entry.push('}');
+        items.push(entry);
+    }
+    format!(
+        "{{\"schema\": {SCHEMA_VERSION}, \"upstream_sha\": \"{UPSTREAM_SHA}\", \"cases\": [{}]}}",
+        items.join(", ")
+    )
+}
+
+/// Renders a string as a MoonBit string literal.
+fn moonbit_string(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 2);
+    out.push('"');
+    for c in s.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if (c as u32) < 0x20 || c as u32 == 0x7F => {
+                let _ = write!(out, "\\u{{{:x}}}", c as u32);
+            }
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
+}
+
+/// Writes a `snapshot: [...]` struct field at the given indentation.
+fn write_moonbit_snapshot(out: &mut String, snapshot: &[String], indent: usize) {
+    let pad = " ".repeat(indent);
+    let _ = writeln!(out, "{pad}snapshot: [");
+    for line in snapshot {
+        let _ = writeln!(out, "{pad}  {},", moonbit_string(line));
+    }
+    let _ = writeln!(out, "{pad}],");
+}
+
+/// Emits the MoonBit case-table file consumed by
+/// `src/boxes/moov_tree_oracle_test.mbt`.
+fn moov_tree_moonbit_cases() -> String {
+    let mut out = String::new();
+    let _ = writeln!(
+        out,
+        "// Generated by `cargo run -- moov-tree-cases --moonbit` (tools/oracle)."
+    );
+    let _ = writeln!(
+        out,
+        "// Source of truth: tools/oracle/src/main.rs (moov_tree_cases)."
+    );
+    let _ = writeln!(out, "// Upstream: shiguredo/mp4-rs@{UPSTREAM_SHA}");
+    let _ = writeln!(
+        out,
+        "// DO NOT EDIT MANUALLY. Regenerate (canonical formatting is part of the file):"
+    );
+    let _ = writeln!(
+        out,
+        "//   (cd tools/oracle && cargo run -- moov-tree-cases --moonbit) \\"
+    );
+    let _ = writeln!(out, "//     > src/boxes/moov_tree_oracle_cases_test.mbt");
+    let _ = writeln!(out, "//   moon fmt");
+    let _ = writeln!(out);
+    let _ = writeln!(out, "///|");
+    let _ = writeln!(
+        out,
+        "/// `tools/oracle` の `moov-tree-cases` が返すケース表（生成物）。"
+    );
+    let _ = writeln!(out, "///");
+    let _ = writeln!(
+        out,
+        "/// 型は `src/boxes/moov_tree_oracle_test.mbt` で定義する。手で編集しない。"
+    );
+    let _ = writeln!(
+        out,
+        "let oracle_moov_tree_cases : Array[OracleMoovTreeCase] = ["
+    );
+    for (name, input) in &moov_tree_cases() {
+        let _ = writeln!(out, "  {{");
+        let _ = writeln!(out, "    name: \"{name}\",");
+        let _ = writeln!(out, "    input: {},", moonbit_bytes(input));
+        match moov_tree_outcome(input) {
+            MoovTreeOutcome::Ok(snapshot) => {
+                let _ = writeln!(out, "    ok: true,");
+                write_moonbit_snapshot(&mut out, &snapshot, 4);
+                let _ = writeln!(out, "    error_kind: \"\",");
+                let _ = writeln!(out, "    reason: \"\",");
+            }
+            MoovTreeOutcome::Err { kind, reason } => {
+                let _ = writeln!(out, "    ok: false,");
+                let _ = writeln!(out, "    snapshot: [],");
+                let _ = writeln!(out, "    error_kind: \"{kind}\",");
+                let _ = writeln!(out, "    reason: {},", moonbit_string(&reason));
+            }
+        }
+        let _ = writeln!(out, "  }},");
+    }
+    let _ = writeln!(out, "]");
+    out
+}
+
+/// Fixtures embedded (with `include_bytes!`) in the generated MoonBit
+/// differential test. The generated data embeds only the extracted top-level
+/// `moov` box, so it changes exactly when a fixture (or its moov) changes.
+const MOOV_TREE_FIXTURES: &[(&str, &[u8])] = &[
+    (
+        "black-h264-video.mp4",
+        include_bytes!("../../../tests/fixtures/upstream/black-h264-video.mp4"),
+    ),
+    (
+        "black-h264-fmp4.mp4",
+        include_bytes!("../../../tests/fixtures/upstream/black-h264-fmp4.mp4"),
+    ),
+];
+
+/// Extracts the top-level `moov` box of every fixture (panics on failure:
+/// generation must not silently emit stale data).
+fn moov_tree_fixture_moovs() -> Vec<(&'static str, Vec<u8>)> {
+    MOOV_TREE_FIXTURES
+        .iter()
+        .map(|(name, data)| {
+            let moov = extract_top_level_box(data, b"moov").unwrap_or_else(|(kind, reason)| {
+                panic!("{name}: top-level moov extraction failed: {kind}: {reason}")
+            });
+            (*name, moov)
+        })
+        .collect()
+}
+
+/// Emits the fixture differential data consumed by
+/// `src/boxes/moov_tree_oracle_test.mbt`.
+fn moov_tree_moonbit_fixtures() -> String {
+    let fixtures = moov_tree_fixture_moovs();
+    let mut out = String::new();
+    let _ = writeln!(
+        out,
+        "// Generated by `cargo run -- moov-tree-fixtures --moonbit` (tools/oracle)."
+    );
+    let _ = writeln!(
+        out,
+        "// Source of truth: tools/oracle/src/main.rs (MOOV_TREE_FIXTURES)."
+    );
+    let _ = writeln!(
+        out,
+        "// Fixtures (top-level `moov` box extracted from the checked-in mp4):"
+    );
+    for (name, moov) in &fixtures {
+        let _ = writeln!(
+            out,
+            "//   {name}: moov {} bytes, sha256 {}",
+            moov.len(),
+            sha256_hex(moov)
+        );
+    }
+    let _ = writeln!(out, "// Upstream: shiguredo/mp4-rs@{UPSTREAM_SHA}");
+    let _ = writeln!(
+        out,
+        "// DO NOT EDIT MANUALLY. Regenerate (canonical formatting is part of the file):"
+    );
+    let _ = writeln!(
+        out,
+        "//   (cd tools/oracle && cargo run -- moov-tree-fixtures --moonbit) \\"
+    );
+    let _ = writeln!(out, "//     > src/boxes/moov_tree_oracle_fixtures_test.mbt");
+    let _ = writeln!(out, "//   moon fmt");
+    let _ = writeln!(out);
+    let _ = writeln!(out, "///|");
+    let _ = writeln!(
+        out,
+        "/// `tools/oracle` の `moov-tree-fixtures` が返す fixture 走査（生成物）。"
+    );
+    let _ = writeln!(out, "///");
+    let _ = writeln!(
+        out,
+        "/// 型は `src/boxes/moov_tree_oracle_test.mbt` で定義する。手で編集しない。"
+    );
+    let _ = writeln!(
+        out,
+        "let oracle_moov_tree_fixtures : Array[OracleMoovTreeFixture] = ["
+    );
+    for (name, moov) in &fixtures {
+        let _ = writeln!(out, "  {{");
+        let _ = writeln!(out, "    name: \"{name}\",");
+        let _ = writeln!(out, "    moov: {},", moonbit_bytes(moov));
+        let snapshot = match moov_tree_outcome(moov) {
+            MoovTreeOutcome::Ok(snapshot) => snapshot,
+            MoovTreeOutcome::Err { kind, reason } => {
+                panic!("{name}: extracted moov decode failed: {kind}: {reason}")
+            }
+        };
+        write_moonbit_snapshot(&mut out, &snapshot, 4);
+        let _ = writeln!(out, "  }},");
+    }
+    let _ = writeln!(out, "]");
+    out
+}
+
 /// Renders the upstream `FtypBox` fields as MoonBit data (or `None`).
 fn ftyp_moonbit(data: &[u8]) -> String {
     if data.len() < 8 || &data[4..8] != b"ftyp" {
@@ -1274,6 +2759,113 @@ mod tests {
                 BoxTreeOutcome::Err(kind) => panic!("{name} walk failed: {kind}"),
             }
         }
+    }
+
+    #[test]
+    fn moov_tree_cases_output_is_deterministic_and_covers_boundaries() {
+        let json = run_moov_tree_cases();
+        assert_eq!(json, run_moov_tree_cases());
+        assert!(json.contains("\"name\": \"minimal_v0\", \"input\": \""));
+        // v1 の 64-bit 値は decimal string で現れる
+        assert!(json.contains("moov.mvhd.creation_time=4294967296"));
+        // 必須ボックスの欠落は invalid_data + 固定理由
+        assert!(json.contains("Missing mandatory 'mvhd' box in 'moov' box"));
+        assert!(json.contains("Missing mandatory 'dref' box in 'dinf' box"));
+        // timescale=0 は NonZeroU32 の decode エラー
+        assert!(json.contains("Expected a non-zero integer, but got 0"));
+        // NUL 終端なし・不正 UTF-8
+        assert!(json.contains("Null-terminated string not found"));
+        assert!(json.contains("Invalid UTF-8 string: [255, 254]"));
+        // 子の途中終端は insufficient_buffer
+        assert!(json.contains("\"name\": \"truncated_child\""));
+        assert!(json.contains("insufficient_buffer"));
+        // duplicate は最初の値が勝つ
+        let dup = json
+            .split("\"name\": \"duplicate_mvhd\"")
+            .nth(1)
+            .expect("duplicate_mvhd case");
+        let dup = &dup[..dup.find("\"name\": \"").unwrap_or(dup.len())];
+        assert!(dup.contains("moov.mvhd.duration=2000"));
+        assert!(!dup.contains("moov.mvhd.duration=3000"));
+    }
+
+    #[test]
+    fn moov_tree_cases_cover_success_and_error_kinds() {
+        let json = run_moov_tree_cases();
+        for name in [
+            "minimal_v0",
+            "minimal_v1",
+            "zero_tracks_unknown_extras",
+            "video_track_vmhd",
+            "audio_track_smhd",
+            "subtitle_track_sthd",
+            "text_track_nmhd",
+            "two_tracks_mixed_versions",
+            "duplicate_mvhd",
+        ] {
+            assert!(
+                json.contains(&format!("\"name\": \"{name}\"")),
+                "missing case {name}"
+            );
+        }
+        for kind in ["invalid_input", "invalid_data", "insufficient_buffer"] {
+            assert!(
+                json.contains(&format!("\"error_kind\": \"{kind}\"")),
+                "missing error kind {kind}"
+            );
+        }
+    }
+
+    #[test]
+    fn moov_tree_moonbit_output_is_deterministic() {
+        assert_eq!(moov_tree_moonbit_cases(), moov_tree_moonbit_cases());
+        assert_eq!(moov_tree_moonbit_fixtures(), moov_tree_moonbit_fixtures());
+    }
+
+    #[test]
+    fn moov_tree_fixture_moovs_are_decodable() {
+        for (name, moov) in moov_tree_fixture_moovs() {
+            let (decoded, used) = MoovBox::decode(&moov).unwrap_or_else(|e| {
+                panic!(
+                    "{name}: moov decode failed: {}: {}",
+                    error_kind_str(e.kind),
+                    e.reason
+                )
+            });
+            assert_eq!(used, moov.len(), "{name}: moov decode length");
+            assert!(!decoded.trak_boxes.is_empty(), "{name}: no tracks");
+            let snapshot = moov_snapshot(&decoded);
+            assert!(
+                snapshot[0].starts_with("moov.mvhd.creation_time="),
+                "{name}: first line"
+            );
+            assert!(
+                snapshot.iter().any(|l| l == "moov.trak_count=1"),
+                "{name}: track count"
+            );
+            assert!(
+                snapshot
+                    .iter()
+                    .any(|l| l == "trak[0].mdia.hdlr.handler_type=vide"),
+                "{name}: video handler"
+            );
+        }
+    }
+
+    #[test]
+    fn moov_tree_file_output_is_deterministic() {
+        let path = "../../tests/fixtures/upstream/black-h264-fmp4.mp4";
+        let json = run_moov_tree(path).expect("run_moov_tree");
+        assert_eq!(json, run_moov_tree(path).expect("run_moov_tree"));
+        assert!(json.contains("\"status\": \"ok\""));
+        assert!(json.contains("\"moov_tree\""));
+    }
+
+    #[test]
+    fn extract_top_level_box_reports_missing_box() {
+        let error = extract_top_level_box(b"\x00\x00\x00\x08free", b"moov").unwrap_err();
+        assert_eq!(error.0, "invalid_data");
+        assert_eq!(error.1, "moov box not found");
     }
 
     #[test]

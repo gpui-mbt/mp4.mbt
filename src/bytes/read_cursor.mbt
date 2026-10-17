@@ -266,6 +266,19 @@ pub fn ReadCursor::read_fixed_8_8(
 }
 
 ///|
+/// `u8.u8` の固定小数点数（8.8、符号なし整数部）を読む。
+///
+/// [`SmhdBox::balance`](gpui-mbt/mp4/boxes) のように整数部が符号なしの 8.8 に使う。
+/// 整数部は生バイトをそのまま `0..=255` として読む。
+pub fn ReadCursor::read_fixed_8_8_unsigned(
+  self : ReadCursor,
+) -> FixedPointNumber raise Mp4Error {
+  let integer = self.read_u8()
+  let fraction = self.read_u8()
+  FixedPointNumber::new(integer.reinterpret_as_int(), fraction)
+}
+
+///|
 /// FourCC（生 4 バイト）を読む。
 pub fn ReadCursor::read_fourcc(self : ReadCursor) -> FourCC raise Mp4Error {
   let bytes = self.read_bytes(4)

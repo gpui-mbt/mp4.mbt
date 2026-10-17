@@ -102,6 +102,63 @@ pub fn FourCC::not_equal(Self, Self) -> Bool
 pub fn FourCC::to_repr(Self) -> @debug.Repr
 pub fn FourCC::to_string(Self) -> String
 
+pub struct LanguageCode {
+  bytes : Bytes
+} derive(Eq, Hash)
+pub fn LanguageCode::as_bytes(Self) -> Bytes
+pub fn LanguageCode::default() -> Self
+pub fn LanguageCode::equal(Self, Self) -> Bool
+pub fn LanguageCode::from_ascii(String) -> Self?
+pub fn LanguageCode::from_packed(UInt) -> Self
+pub fn LanguageCode::hash(Self) -> Int
+pub fn LanguageCode::hash_combine(Self, Hasher) -> Unit
+pub fn LanguageCode::new(Bytes) -> Self?
+pub fn LanguageCode::not_equal(Self, Self) -> Bool
+pub fn LanguageCode::to_packed(Self) -> UInt
+pub fn LanguageCode::to_repr(Self) -> @debug.Repr
+pub fn LanguageCode::to_string(Self) -> String
+pub fn LanguageCode::undefined() -> Self
+pub impl Default for LanguageCode
+pub impl @debug.Debug for LanguageCode
+
+pub struct Mp4FileTime {
+  seconds : UInt64
+} derive(Eq, Hash, @debug.Debug)
+pub fn Mp4FileTime::as_secs(Self) -> UInt64
+pub fn Mp4FileTime::compare(Self, Self) -> Int
+pub fn Mp4FileTime::default() -> Self
+pub fn Mp4FileTime::equal(Self, Self) -> Bool
+pub fn Mp4FileTime::from_secs(UInt64) -> Self
+pub fn Mp4FileTime::from_unix_seconds(UInt64) -> Self
+pub fn Mp4FileTime::hash(Self) -> Int
+pub fn Mp4FileTime::hash_combine(Self, Hasher) -> Unit
+pub fn Mp4FileTime::not_equal(Self, Self) -> Bool
+pub fn Mp4FileTime::op_ge(Self, Self) -> Bool
+pub fn Mp4FileTime::op_gt(Self, Self) -> Bool
+pub fn Mp4FileTime::op_le(Self, Self) -> Bool
+pub fn Mp4FileTime::op_lt(Self, Self) -> Bool
+pub fn Mp4FileTime::to_repr(Self) -> @debug.Repr
+pub impl Compare for Mp4FileTime
+pub impl Default for Mp4FileTime
+
+pub struct NonZeroU32 {
+  value : UInt
+} derive(Eq, Hash, @debug.Debug)
+pub fn NonZeroU32::decode(ReadCursor) -> Self raise Mp4Error
+pub fn NonZeroU32::default() -> Self
+pub fn NonZeroU32::encode(Self, WriteCursor) -> Unit raise Mp4Error
+pub fn NonZeroU32::equal(Self, Self) -> Bool
+pub fn NonZeroU32::get(Self) -> UInt
+pub fn NonZeroU32::hash(Self) -> Int
+pub fn NonZeroU32::hash_combine(Self, Hasher) -> Unit
+pub fn NonZeroU32::new(UInt) -> Self?
+pub fn NonZeroU32::not_equal(Self, Self) -> Bool
+pub fn NonZeroU32::one() -> Self
+pub fn NonZeroU32::to_repr(Self) -> @debug.Repr
+pub impl Decode for NonZeroU32
+pub impl Encode for NonZeroU32
+pub impl Default for NonZeroU32
+
 pub struct ParseLimits {
   max_allocation_size : UInt64
   max_nesting_depth : Int
@@ -138,6 +195,7 @@ pub fn ReadCursor::read_bytes(Self, Int) -> Bytes raise Mp4Error
 pub fn ReadCursor::read_bytes_view(Self, Int) -> BytesView raise Mp4Error
 pub fn ReadCursor::read_fixed_16_16(Self) -> FixedPointNumber raise Mp4Error
 pub fn ReadCursor::read_fixed_8_8(Self) -> FixedPointNumber raise Mp4Error
+pub fn ReadCursor::read_fixed_8_8_unsigned(Self) -> FixedPointNumber raise Mp4Error
 pub fn ReadCursor::read_fourcc(Self) -> FourCC raise Mp4Error
 pub fn ReadCursor::read_i16(Self) -> Int raise Mp4Error
 pub fn ReadCursor::read_i32(Self) -> Int raise Mp4Error
@@ -155,6 +213,36 @@ pub fn ReadCursor::rewind_to(Self, Int) -> Unit raise Mp4Error
 pub fn ReadCursor::skip(Self, Int) -> Unit raise Mp4Error
 pub fn ReadCursor::sub_cursor(Self, Int) -> Self raise Mp4Error
 pub fn ReadCursor::with_config(Bytes, UInt64, ParseLimits) -> Self
+
+pub(all) enum TrackKind {
+  Audio
+  Video
+  Subtitle
+} derive(Eq, Hash, @debug.Debug)
+pub fn TrackKind::equal(Self, Self) -> Bool
+pub fn TrackKind::hash(Self) -> Int
+pub fn TrackKind::hash_combine(Self, Hasher) -> Unit
+pub fn TrackKind::not_equal(Self, Self) -> Bool
+pub fn TrackKind::to_repr(Self) -> @debug.Repr
+
+pub struct Utf8String {
+  value : String
+} derive(Eq, Hash, @debug.Debug)
+pub fn Utf8String::decode(ReadCursor) -> Self raise Mp4Error
+pub fn Utf8String::default() -> Self
+pub fn Utf8String::empty() -> Self
+pub fn Utf8String::encode(Self, WriteCursor) -> Unit raise Mp4Error
+pub fn Utf8String::equal(Self, Self) -> Bool
+pub fn Utf8String::get(Self) -> String
+pub fn Utf8String::hash(Self) -> Int
+pub fn Utf8String::hash_combine(Self, Hasher) -> Unit
+pub fn Utf8String::into_null_terminated_bytes(Self) -> Bytes
+pub fn Utf8String::new(String) -> Self?
+pub fn Utf8String::not_equal(Self, Self) -> Bool
+pub fn Utf8String::to_repr(Self) -> @debug.Repr
+pub impl Decode for Utf8String
+pub impl Encode for Utf8String
+pub impl Default for Utf8String
 
 pub struct Uuid {
   bytes : Bytes
@@ -179,6 +267,7 @@ pub fn WriteCursor::write_bytes(Self, Bytes) -> Unit
 pub fn WriteCursor::write_bytes_view(Self, BytesView) -> Unit
 pub fn WriteCursor::write_fixed_16_16(Self, FixedPointNumber) -> Unit
 pub fn WriteCursor::write_fixed_8_8(Self, FixedPointNumber) -> Unit
+pub fn WriteCursor::write_fixed_8_8_unsigned(Self, FixedPointNumber) -> Unit
 pub fn WriteCursor::write_fourcc(Self, FourCC) -> Unit
 pub fn WriteCursor::write_i16(Self, Int) -> Unit
 pub fn WriteCursor::write_i32(Self, Int) -> Unit

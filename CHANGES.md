@@ -8,6 +8,20 @@ versions (`M0`–`M5`); unreleased work is listed under `Unreleased`.
 
 ### Added
 
+- Movie/track boxes and timestamps (issue 0008): `src/boxes` gains the typed
+  `moov` tree (`MoovBox`, `MvhdBox`, `TrakBox`, `TkhdBox`, `EdtsBox`/
+  `ElstBox`, `MdiaBox`, `MdhdBox`, `HdlrBox`, `MinfBox`, `MediaHeader`
+  (`SmhdBox`/`VmhdBox`/`SthdBox`/`NmhdBox`), `DinfBox`, `DrefBox`, `UrlBox`)
+  with version 0/1 time and duration handling, first-child-wins duplicate
+  rules, mandatory-child errors and `unknown_boxes` retention. `RootBox` gains
+  the `Moov` variant. `src/bytes` gains `Mp4FileTime`, `Utf8String`,
+  `LanguageCode`, `TrackKind`, `NonZeroU32` and the unsigned 8.8 fixed-point
+  cursor helpers. `mvex`/`stbl` stay in `unknown_boxes` until issues 0017/0009
+  (documented in `docs/upstream.md`). The Rust oracle gains `moov-tree`,
+  `moov-tree-cases` and `moov-tree-fixtures` modes; the generated case table
+  and two embedded-fixture moovs are consumed by
+  `src/boxes/moov_tree_oracle_test.mbt` and diffed in CI.
+
 - Root boxes and header-level box tree (issue 0007): `src/boxes` gains
   `FtypBox` (major/minor brand and compatible brands), `FreeBox`, `MdatBox`
   (payload range `data_offset`/`data_size`, no copy), `UnknownBox` (`decode`
