@@ -192,3 +192,34 @@ jobs:
             if (mp4.mp4dump_next_request(s) !== "") throw new Error("request after cancel");
             console.log("web bundle smoke: ok");
           '
+
+  diff-lab:
+    name: diff-lab (Rust/WASM vs MoonBit diff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+      - name: Cache cargo registry and git dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-${{ runner.os }}-${{ hashFiles('tools/lab-oracle/Cargo.lock') }}
+          restore-keys: cargo-${{ runner.os }}-
+      - name: Build bundle + wasm oracle
+        # rust-toolchain.toml (1.94.0 + wasm32-unknown-unknown target) is
+        # resolved inside tools/lab-oracle by rustup automatically.
+        run: sh web/build.sh
+      - name: Run diff lab over all manifest fixtures
+        run: node web/run_lab.mjs
+      - name: Upload lab reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diff-lab-reports
+          path: web/lab-out/
+          if-no-files-found: warn

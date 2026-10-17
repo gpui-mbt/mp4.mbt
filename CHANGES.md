@@ -8,6 +8,22 @@ versions (`M0`–`M5`); unreleased work is listed under `Unreleased`.
 
 ### Added
 
+- Rust/WASM vs MoonBit/JS conformance diff lab (issue 0016): same MP4 bytes
+  are parsed by the pinned-upstream Rust reference compiled to
+  `wasm32-unknown-unknown` (`tools/lab-oracle`, a raw `cdylib` with the
+  upstream `mp4_alloc`/`Vec` ABI shape — no wasm-bindgen) and by the MoonBit
+  candidate, then compared field-path by field-path in
+  `src/difflab` (pure MoonBit: allowlist normalization, no zero-filling of
+  unknown fields, 64-bit decimal strings, `null` vs `0` distinguished,
+  `PASS`/`FAIL`/`UNVERIFIED`/`NOT_RUN` verdicts, box trees compared
+  order-independently with coverage gaps recorded as excluded instead of order
+  diffs). `tools/oracle` emitters were extracted into `oracle_json.rs` shared
+  by the native oracle and the wasm cdylib. `web/lab.html`/`lab.js` render the
+  report (verdict, diff table, excluded list, run meta, fault-injection and
+  download buttons); `web/run_lab.mjs` runs all manifest fixtures under Node
+  and writes `web/lab-out/` reports which CI's new `diff-lab` job uploads as
+  artifacts (issue 0016).
+
 - Browser MP4 dump demo (issue 0015): `web/` gains a self-contained static app
   (`index.html`, `app.js`, `style.css`, `build.sh`) deployed to GitHub Pages
   via `.github/workflows/pages.yml`. `src/webdump` is a `foreign_library`

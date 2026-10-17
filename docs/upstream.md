@@ -221,6 +221,19 @@ Issue 0007 で確定した対応の補足:
 - `src/demux_report`（CLI / Web 共有の canonical JSON レンダラ）を新設した。track 行に `codec` フィールド（表示された sample の entry 由来、sample が無い track は `null`）が追加され、CLI の JSON 出力も同一 schema に統一された。
 - 公開 ESM API は `mp4dump_create(name, file_size, max_read)` / `mp4dump_next_request` / `mp4dump_feed` / `mp4dump_state` / `mp4dump_cancel` / `mp4dump_*_json` の 11 関数のみ。`UInt64` は JS `BigInt`、`Bytes` は `Uint8Array` として受け渡しする。
 
+### Issue 0016 で確定した対応の補足
+
+`examples/dump_wasm` + `crates/wasm`（上流リポジトリ）→ `tools/lab-oracle` + `src/difflab` + `web/lab.*`（本リポジトリの conformance lab）。上流の wasm クレートを移植するのではなく、固定コミットの Rust 実装そのものを wasm32 へコンパイルして「参照実装」としてブラウザ内で実行し、candidate（MoonBit/JS）と差分比較する構成は本リポジトリ独自。
+
+| 上流 | MoonBit 側 | 備考 |
+| --- | --- | --- |
+| `crates/wasm`（`mp4_alloc` / `mp4_vec_ptr` / `mp4_demux_*_to_json` の生 C ABI） | `tools/lab-oracle`（wasm32-unknown-unknown cdylib: `lab_alloc` / `lab_free` / `lab_vec_ptr` / `lab_vec_len` / `lab_vec_free` / `oracle_dump`） | ABI 形状は上流の `allocate_vec` 規約を踏襲（wasm-bindgen 不使用）。`oracle_dump` が 1 回で canonical JSON（kind + tracks + samples + box_tree）を返す。JSON emitter は `tools/oracle/src/oracle_json.rs`（native oracle と同一モジュールを共有）で、golden schema との逸脱があればここで検出できる |
+| （差分比較ツールなし） | `src/difflab`（pure MoonBit comparator）+ `mp4lab_compare_json` / `mp4lab_unverified_json`（`src/webdump` ESM export） | 許可リスト正規化（oracle の `dts`/`pts_offset` ↔ candidate の `timestamp`/`composition_time_offset` 等）。未知・欠損フィールドのゼロ埋め禁止。64bit は十進文字列、null と 0 を区別。判定は PASS / FAIL / UNVERIFIED / NOT_RUN を独立に記録し、oracle 不能・candidate 未起動は UNVERIFIED（PASS にしない）。box tree は順序非依存比較 + `box_tree.order` で順序差を分離、candidate の網羅範囲外ノードは excluded として記録（coverage 差を順序差と誤判定しない） |
+| `examples/dump_wasm`（全量読み + textarea 表示） | `web/lab.html` / `web/lab.js`（verdict・差分テーブル・excluded 一覧・実行メタ・故障注入ボタン・レポート JSON ダウンロード） | oracle は全量読み、candidate は File.slice Range I/O と、両経路の独立性を維持。レポートには upstream SHA・fixture SHA-256・ツールチェーン・エンジン識別を記録 |
+| （CI artifact 化なし） | `web/run_lab.mjs`（Node ランナー: manifest 全 fixture を比較し `web/lab-out/` にレポート保存）+ CI `diff-lab` job（artifact upload） | 全 fixture PASS がゲート。故障注入 self-test（`samples[0].duration` 改竄 → 該当 path FAIL 検出）をランナー内で実行し、比較器が差分を実際に検出できることの実行証拠を残す |
+
+- `tools/oracle` の emit 系関数（`kind_json` / `tracks_json` / `samples_json` / `box_tree_json` 等）を `tools/oracle/src/oracle_json.rs` へ抽出し、native バイナリと wasm cdylib の双方から共有した。golden 再生成は全 fixture で一致を確認済み（emitter 抽出は無差分）。
+
 ### `demux` / `mux` / `bitstream`
 
 | 上流 | 概要 | MoonBit 側の対応（予定） |
@@ -281,6 +294,7 @@ Issue 0007 で確定した対応の補足:
 
 ## 7. 更新履歴
 
+- 2026-10-18: Issue 0016（Rust/WASM 差分 Lab）の対応表を追記。`tools/lab-oracle`（wasm32 cdylib、上流 `allocate_vec` 規約の ABI + 固定コミット参照実装をブラウザ内実行）、`tools/oracle/src/oracle_json.rs` への emitter 共有抽出、`src/difflab`（許可リスト正規化・PASS/FAIL/UNVERIFIED/NOT_RUN・box tree 順序非依存 + coverage 分離）、`mp4lab_*` ESM export、`web/lab.*` UI、`web/run_lab.mjs` Node ランナーと CI `diff-lab` job、故障注入 self-test を記録。
 - 2026-10-18: Issue 0015（ブラウザ MP4 Dump デモ）の対応表を追記。`examples/dump_wasm` → `src/webdump` + `web/`（独自構成）、`File.slice` による Range I/O、`mp4dump_*` ESM export API、`src/demux_report` canonical JSON（CLI と共有、`codec` フィールド追加）、キャンセル/世代管理を記録。
 - 2026-10-18: Issue 0014（demux CLI サンプル）の対応表を追記。`examples/demux.rs` → `src/examples/demux`（native 実行パッケージ）、`required_input` 駆動の seek/read アダプタ、上流のバッファ切り詰めに対する `RequestTooLarge` の明示化、`--max-samples` / `--json` / `--buffer-size`、固定終了コード（0/2/3/4/5）、64bit の JSON 十進文字列規約、`moonbitlang/async` 依存の追加（実行パッケージ限定）を記録。
 - 2026-10-18: Issue 0013（通常 MP4 demuxer）の対応表を追記。`Mp4FileDemuxer` の同名 API（`prev_sample` / `seek` / `Duration` 含む）、`TrackInfo` / `Sample`、`(secs, nanos)` 辞書順の整数タイムスタンプ比較、エラー保持の take セマンティクス、未知 `hdlr` の skip、offset 加算の防御検査、oracle `demux-cases`（muxer 生成の合成入力を含む）を記録。

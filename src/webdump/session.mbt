@@ -836,3 +836,36 @@ pub fn mp4dump_read_log_json(session : WebDumpSession) -> String {
 pub fn mp4dump_error_json(session : WebDumpSession) -> String {
   session.error_json()
 }
+
+///|
+/// 差分 Lab: oracle (Rust/WASM) と candidate (MoonBit/JS) の観測 JSON を
+/// 突き合わせ、field path 単位の差分レポート JSON を返す (issue 0016)。
+/// 入力はいずれも JSON 文字列。parse 失敗は JSON エラーレポートとして返す。
+#export_name("mp4lab_compare_json")
+pub fn mp4lab_compare_json(
+  oracle_json : String,
+  candidate_json : String,
+  meta_json : String,
+) -> String {
+  try @difflab.diff_reports_json(oracle_json, candidate_json, meta_json) catch {
+    _ =>
+      // parse 失敗は UNVERIFIED (FAIL と混同しない)
+      @difflab.unverified_report(
+        @json.parse(meta_json[:]) catch {
+          _ => Json::null()
+        },
+        "invalid input JSON to comparator",
+      ).stringify()
+  } noraise {
+    v => v
+  }
+}
+
+///|
+/// 差分 Lab: 実行不能 (oracle wasm 不在 / candidate ビルド失敗) の
+/// UNVERIFIED レポートを生成する。
+#export_name("mp4lab_unverified_json")
+pub fn mp4lab_unverified_json(meta_json : String, reason : String) -> String {
+  let meta = @json.parse(meta_json[:]) catch { _ => Json::null() }
+  @difflab.unverified_report(meta, reason).stringify()
+}

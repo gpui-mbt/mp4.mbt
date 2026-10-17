@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MP4 Diff Lab — Rust/WASM vs MoonBit/JS</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>MP4 Diff Lab</h1>
+  <p>
+    同一の MP4 bytes を <strong>Rust/WASM</strong> (固定コミットの参照実装
+    <code>1282b704</code>) と <strong>MoonBit/JS</strong> (本リポジトリ) で
+    それぞれ解析し、観測値を field path 単位で突き合わせます。
+    判定は <code>PASS</code> / <code>FAIL</code> / <code>UNVERIFIED</code> /
+    <code>NOT_RUN</code> を区別します (「差分なし」と「未検証」を混同しません)。
+  </p>
+  <ul class="notes">
+    <li>解析はすべてブラウザ内で完結します。ファイルは外部に送信されません。</li>
+    <li>Rust 側は <code>tools/lab-oracle</code> (wasm32 cdylib) が全量読みで観測、
+        MoonBit 側は File.slice の Range I/O で観測します (mdat ペイロードは読みません)。</li>
+    <li>box tree は出現順が入力順と一致しない場合があるため順序非依存で比較し、
+        順序差は <code>box_tree.order</code> エントリとして分離します。</li>
+    <li><a href="index.html">MP4 Dump デモへ戻る</a></li>
+  </ul>
+</header>
+
+<main>
+  <section id="controls">
+    <div id="drop-zone" class="dropzone">MP4 ファイルをドラッグ&ドロップ、またはクリックして選択</div>
+    <input type="file" id="file-input" accept=".mp4,.m4v,.mov,.heic,.heif,video/mp4" hidden>
+    <div class="row">
+      <button id="fault-button" type="button" disabled>故障注入 (sample[0].duration +1)</button>
+      <button id="download-button" type="button" disabled>レポート JSON をダウンロード</button>
+    </div>
+  </section>
+
+  <section id="engines" hidden>
+    <h2>実行エンジン</h2>
+    <pre id="engine-log" class="log"></pre>
+  </section>
+
+  <section id="verdict-section" hidden>
+    <h2>判定</h2>
+    <div id="verdict" class="verdict"></div>
+    <div id="stats" class="stats"></div>
+  </section>
+
+  <section id="diff-section" hidden>
+    <h2>差分エントリ</h2>
+    <table class="table" id="diff-table">
+      <thead>
+        <tr><th>Field Path</th><th>Verdict</th><th>Expected (Rust)</th><th>Actual (MoonBit)</th><th>Note</th></tr>
+      </thead>
+      <tbody id="diff-tbody"></tbody>
+    </table>
+  </section>
+
+  <section id="excluded-section" hidden>
+    <h2>比較対象外 (excluded / NOT_RUN)</h2>
+    <table class="table" id="excluded-table">
+      <thead><tr><th>Path</th><th>Reason</th></tr></thead>
+      <tbody id="excluded-tbody"></tbody>
+    </table>
+  </section>
+
+  <section id="meta-section" hidden>
+    <h2>実行メタ</h2>
+    <pre id="meta" class="log"></pre>
+  </section>
+</main>
+
+<script type="module" src="lab.js"></script>
+</body>
+</html>

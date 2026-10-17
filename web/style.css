@@ -125,3 +125,35 @@ th { position: sticky; top: 0; background: Canvas; }
   font-size: 0.75rem;
   margin-top: 0.5rem;
 }
+
+/* ---- Diff Lab (lab.html) ---- */
+.row {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.8rem;
+}
+.log {
+  font-family: ui-monospace, monospace;
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.5rem;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.verdict {
+  display: inline-block;
+  font-family: ui-monospace, monospace;
+  font-weight: 700;
+  font-size: 1.2rem;
+  padding: 0.3rem 1rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+.verdict-pass { background: #2a73; color: #2a7; }
+.verdict-fail { background: #c332; color: #f66; }
+.verdict-unverified, .verdict-not_run { background: #ca03; color: #ca0; }
+.stats { margin-top: 0.4rem; font-family: ui-monospace, monospace; font-size: 0.85rem; }
+tr.row-fail td { background: #c332; }
+tr.row-pass td { opacity: 0.85; }

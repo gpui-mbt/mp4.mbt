@@ -7,4 +7,6 @@ target
 .repos/
 *.log
 web/dist/
+web/lab-out/
 web/e2e-screenshot.png
+web/e2e-screenshot-lab.png

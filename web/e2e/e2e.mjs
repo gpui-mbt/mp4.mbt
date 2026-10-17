@@ -38,6 +38,7 @@ const MIME = {
   ".js": "text/javascript",
   ".css": "text/css",
   ".json": "application/json",
+  ".wasm": "application/wasm",
 };
 
 const server = createServer(async (req, res) => {
@@ -138,6 +139,46 @@ async function main() {
   await page.waitForSelector("#tracks-section:not([hidden])", { timeout: 10000 });
   const reTree = await page.textContent("#box-tree");
   check("re-selection renders fresh tree", reTree.includes("moov"));
+
+  // ---- Diff Lab (issue 0016) ----
+  await page.goto(`http://127.0.0.1:${port}/lab.html`);
+  await page.setInputFiles("#file-input", fixture);
+  await page.waitForSelector("#verdict-section:not([hidden])", { timeout: 30000 });
+
+  const verdict = await page.textContent("#verdict");
+  check("lab verdict is PASS", verdict.trim() === "PASS", verdict.trim());
+
+  const engineLog = await page.textContent("#engine-log");
+  check(
+    "lab ran both engines",
+    engineLog.includes("[oracle] dump ok") && engineLog.includes("[candidate]"),
+    engineLog.trim().split("\n").join(" | "),
+  );
+
+  const stats = await page.textContent("#stats");
+  check("lab stats: 0 fail", stats.includes("fail=0"), stats.trim());
+
+  const meta = JSON.parse(await page.textContent("#meta"));
+  check(
+    "lab meta pins upstream sha",
+    meta.upstream_sha === "1282b704f44184ec792e1549b5d31e0c4c54dc59" &&
+      meta.oracle_engine.includes("rust/wasm32") &&
+      meta.candidate_engine.includes("moonbit/js"),
+  );
+
+  // 故障注入: candidate の samples[0].duration を +1 → samples[0].duration が FAIL
+  await page.click("#fault-button");
+  await page.waitForSelector("#verdict-section:not([hidden])", { timeout: 10000 });
+  const faultVerdict = await page.textContent("#verdict");
+  check("fault injection yields FAIL", faultVerdict.trim() === "FAIL", faultVerdict.trim());
+  const faultPaths = await page.$$eval("#diff-tbody tr.row-fail td:first-child",
+    (els) => els.map((e) => e.textContent));
+  check(
+    "fault lands on samples[0].duration",
+    faultPaths.includes("samples[0].duration"),
+    faultPaths.join(","),
+  );
+  await page.screenshot({ path: join(distDir, "../e2e-screenshot-lab.png"), fullPage: true });
 
   const failed = results.filter((r) => !r.ok).length;
   console.log(`\n${results.length - failed}/${results.length} passed`);

@@ -28,6 +28,10 @@ pub fn mp4dump_state(WebDumpSession) -> String
 
 pub fn mp4dump_tracks_json(WebDumpSession) -> String
 
+pub fn mp4lab_compare_json(String, String, String) -> String
+
+pub fn mp4lab_unverified_json(String, String) -> String
+
 // Errors
 
 // Types and methods

@@ -1,0 +1,14 @@
+[package]
+name = "lab-oracle"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+description = "wasm32 cdylib wrapper exposing the pinned-upstream reference observation for the browser diff lab (issue 0016)"
+
+[lib]
+crate-type = ["cdylib"]
+name = "lab_oracle"
+
+[dependencies]
+shiguredo_mp4 = { git = "https://github.com/shiguredo/mp4-rs", rev = "1282b704f44184ec792e1549b5d31e0c4c54dc59" }

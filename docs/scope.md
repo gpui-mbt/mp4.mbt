@@ -62,7 +62,7 @@
 | AV1/VP8/VP9 bitstream 補助 | `bitstream::{av1, vp8, vp9}` | Not started | Unit / fixture |
 | 字幕 sample entry | `StppBox` / `WvttBox` / `Tx3gBox` | Not started | Unit / fixture |
 | Web MP4 Dump | （本リポジトリ独自） | Implemented（0015） | Unit / JS ESM smoke / Browser E2E |
-| Rust/WASM 差分 Lab | （本リポジトリ独自） | Not started | Differential |
+| Rust/WASM 差分 Lab | （本リポジトリ独自） | Implemented（0016） | Differential / Node runner / Browser E2E / CI artifact |
 | WebCodecs 変換デモ | （本リポジトリ独自） | Not started | Browser E2E |
 | Native Inspector (gpui.mbt) | （本リポジトリ独自） | Not started | Native UI E2E |
 | C ABI | `crates/c-api` | 対象外 | — |

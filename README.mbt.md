@@ -107,6 +107,33 @@ and asserts the read log never spans `mdat` payload:
 PLAYWRIGHT_PATH=<path-to-playwright> node web/e2e/e2e.mjs
 ```
 
+### Diff Lab — Rust/WASM vs MoonBit/JS
+
+`web/lab.html` is a conformance lab: the same MP4 bytes are parsed by the
+pinned-upstream **Rust reference compiled to wasm** (`tools/lab-oracle`, a raw
+`cdylib` with the `mp4_alloc`/`Vec` ABI shape of upstream `dump_wasm`) and by
+the **MoonBit/JS candidate**, then compared field-path by field-path. The
+report carries the pinned upstream SHA, fixture checksum and toolchain meta,
+and distinguishes `PASS` / `FAIL` / `UNVERIFIED` / `NOT_RUN` — an oracle or
+candidate that never ran is never reported as a match. 64-bit values compare
+as decimal strings and `null` is never conflated with `0`.
+
+The comparator is pure MoonBit (`src/difflab`, allowlist normalization — no
+zero-filling of unknown fields) exported as `mp4lab_compare_json` /
+`mp4lab_unverified_json` from the same ESM bundle. A Node runner regenerates
+the report set for every fixture in `tests/fixtures/manifest.json` and is what
+CI runs:
+
+```bash
+sh web/build.sh        # builds mp4.js + tools/lab-oracle → web/dist/oracle.wasm
+node web/run_lab.mjs   # writes web/lab-out/*.report.json + summary.json
+```
+
+CI's `diff-lab` job runs the above and uploads `web/lab-out/` as an artifact;
+the browser page additionally proves both engines actually execute (engine
+log) and includes a fault-injection button that mutates one sample duration to
+demonstrate a real `FAIL` at `samples[0].duration`.
+
 ### Library
 
 The Sans I/O demuxer for normal MP4 files lives in `gpui-mbt/mp4/demux`
