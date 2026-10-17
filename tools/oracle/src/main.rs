@@ -150,6 +150,14 @@ fn main() -> ExitCode {
             print!("{}", sample_entry_moonbit_fixtures());
             ExitCode::SUCCESS
         }
+        Some("codec-strings-cases") if args.len() == 2 => {
+            println!("{}", run_codec_string_cases());
+            ExitCode::SUCCESS
+        }
+        Some("codec-strings-cases") if args.len() == 3 && args[2] == "--moonbit" => {
+            print!("{}", codec_string_moonbit_cases());
+            ExitCode::SUCCESS
+        }
         _ => {
             eprintln!("usage: mp4-oracle demux <mp4-file>");
             eprintln!("       mp4-oracle box-headers");
@@ -170,6 +178,8 @@ fn main() -> ExitCode {
             eprintln!("       mp4-oracle sample-entries-cases");
             eprintln!("       mp4-oracle sample-entries-cases --moonbit");
             eprintln!("       mp4-oracle sample-entries-fixtures --moonbit");
+            eprintln!("       mp4-oracle codec-strings-cases");
+            eprintln!("       mp4-oracle codec-strings-cases --moonbit");
             ExitCode::from(2)
         }
     }
@@ -4423,12 +4433,46 @@ fn sample_entry_cases() -> Vec<(&'static str, Vec<u8>)> {
         )
     }
 
+    /// `hvcC` v1 with caller-chosen PTL bytes (space+tier+idc, compat,
+    /// 6-byte constraint, level); the shared trailing fields stay constant.
+    fn hvcc_with(ptl: u8, compat: u32, constraint: &[u8; 6], level: u8) -> Vec<u8> {
+        let mut payload = vec![0x01, ptl];
+        payload.extend_from_slice(&compat.to_be_bytes());
+        payload.extend_from_slice(constraint);
+        payload.push(level);
+        payload.extend_from_slice(&[0xf0, 0x00, 0xfc, 0xfc, 0xf8, 0xf8, 0x00, 0x00, 0x03, 0x00]);
+        raw_box(b"hvcC", &payload)
+    }
+
     fn vpcc() -> Vec<u8> {
         full_box(b"vpcC", 1, 0, &[0, 10, 0x80, 1, 1, 1, 0, 0])
     }
 
+    /// `vpcC` v1 with caller-chosen profile / level / bit_depth.
+    fn vpcc_with(profile: u8, level: u8, bit_depth: u8) -> Vec<u8> {
+        full_box(
+            b"vpcC",
+            1,
+            0,
+            &[profile, level, bit_depth << 4, 1, 1, 1, 0, 0],
+        )
+    }
+
     fn av1c() -> Vec<u8> {
         raw_box(b"av1C", &[0x81, 0x00, 0x00, 0x00])
+    }
+
+    /// `av1C` v1 with caller-chosen seq_profile / level / tier / depth flags.
+    fn av1c_with(profile: u8, level: u8, tier: u8, high: u8, twelve: u8) -> Vec<u8> {
+        raw_box(
+            b"av1C",
+            &[
+                0x81,
+                (profile << 5) | level,
+                (tier << 7) | (high << 6) | (twelve << 5),
+                0x00,
+            ],
+        )
     }
 
     fn dops() -> Vec<u8> {
@@ -4451,6 +4495,30 @@ fn sample_entry_cases() -> Vec<(&'static str, Vec<u8>)> {
                 0x06, 0x01, 0x02, // SLConfigDescr predefined=2
             ],
         )
+    }
+
+    /// `esds` v0 with a caller-chosen OTI and optional DecSpecificInfo payload.
+    /// `dec_config` declared size covers only its fixed 13 bytes (DSI excluded),
+    /// matching `DecoderConfigDescriptor::encode` in upstream.
+    fn esds_with_oti(oti: u8, dsi: Option<&[u8]>) -> Vec<u8> {
+        let mut dec = vec![
+            0x04, 0x0d, oti, 0x15, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00,
+        ];
+        if let Some(dsi) = dsi {
+            dec.extend_from_slice(&[0x05, dsi.len() as u8]);
+            dec.extend_from_slice(dsi);
+        }
+        let mut es = vec![0x03, 0x00, 0x00, 0x01, 0x00];
+        es.extend_from_slice(&dec);
+        es.extend_from_slice(&[0x06, 0x01, 0x02]);
+        es[1] = (es.len() - 2) as u8;
+        full_box(b"esds", 0, 0, &es)
+    }
+
+    /// `esds` v0 whose DecoderConfigDescriptor has no DecSpecificInfo.
+    fn esds_no_dsi() -> Vec<u8> {
+        esds_with_oti(0x40, None)
     }
 
     /// `esds` exercising all three optional ES flags.
@@ -4627,6 +4695,90 @@ fn sample_entry_cases() -> Vec<(&'static str, Vec<u8>)> {
         *c.last_mut().unwrap() = 1;
         entry(b"mp4a", &audio, &[c])
     }));
+    cases.push(("mp4a_no_dsi", entry(b"mp4a", &audio, &[esds_no_dsi()])));
+    cases.push((
+        "mp4a_oti_6b",
+        entry(b"mp4a", &audio, &[esds_with_oti(0x6b, None)]),
+    ));
+    cases.push((
+        "mp4a_aot31_escape",
+        entry(b"mp4a", &audio, &[esds_with_oti(0x40, Some(&[0xf8, 0x40]))]),
+    ));
+    cases.push((
+        "mp4a_aot31_ext_bits",
+        entry(b"mp4a", &audio, &[esds_with_oti(0x40, Some(&[0xf9, 0x20]))]),
+    ));
+    cases.push((
+        "mp4a_asc_empty",
+        entry(b"mp4a", &audio, &[esds_with_oti(0x40, Some(&[]))]),
+    ));
+    cases.push((
+        "mp4a_asc_truncated",
+        entry(b"mp4a", &audio, &[esds_with_oti(0x40, Some(&[0xf8]))]),
+    ));
+    // HEVC codec-string boundary cases (issue 0011): profile space letters,
+    // compat=0, all-zero / trailing-zero constraints, and the high tier.
+    cases.push((
+        "hev1_space_b",
+        entry(
+            b"hev1",
+            &visual,
+            &[hvcc_with(0x81, 0x60000000, &[0x90, 0, 0, 0, 0, 0], 120)],
+        ),
+    ));
+    cases.push((
+        "hev1_tier_h_space_a",
+        entry(
+            b"hev1",
+            &visual,
+            &[hvcc_with(0x62, 0x60000000, &[0x90, 0, 0, 0, 0, 0], 93)],
+        ),
+    ));
+    cases.push((
+        "hev1_compat_zero",
+        entry(
+            b"hev1",
+            &visual,
+            &[hvcc_with(0x01, 0, &[0x90, 0, 0, 0, 0, 0], 93)],
+        ),
+    ));
+    cases.push((
+        "hev1_constraint_all_zero",
+        entry(
+            b"hev1",
+            &visual,
+            &[hvcc_with(0x01, 0x60000000, &[0; 6], 93)],
+        ),
+    ));
+    cases.push((
+        "hev1_constraint_trailing_zeros",
+        entry(
+            b"hev1",
+            &visual,
+            &[hvcc_with(0x01, 0x60000000, &[0x90, 0, 1, 0, 0, 0], 93)],
+        ),
+    ));
+    // AV1 bit-depth branches and VP9 two-digit fields (issue 0011).
+    cases.push((
+        "av01_level1",
+        entry(b"av01", &visual, &[av1c_with(0, 1, 0, 0, 0)]),
+    ));
+    cases.push((
+        "av01_profile2_12bit",
+        entry(b"av01", &visual, &[av1c_with(2, 4, 1, 1, 1)]),
+    ));
+    cases.push((
+        "av01_profile2_10bit",
+        entry(b"av01", &visual, &[av1c_with(2, 4, 1, 1, 0)]),
+    ));
+    cases.push((
+        "av01_high_bitdepth",
+        entry(b"av01", &visual, &[av1c_with(0, 0, 0, 1, 0)]),
+    ));
+    cases.push((
+        "vp09_level31",
+        entry(b"vp09", &visual, &[vpcc_with(0, 31, 8)]),
+    ));
     cases.push(("avcc_sps_too_large", {
         let mut c = avcc(66, false);
         // declared SPS length exceeds the remaining payload
@@ -4888,6 +5040,165 @@ fn sample_entry_moonbit_fixtures() -> String {
         let _ = writeln!(out, "    entry_index: {entry_index},");
         let _ = writeln!(out, "    input: {},", moonbit_bytes(entry_bytes));
         write_moonbit_snapshot(&mut out, &snapshot, 4);
+        let _ = writeln!(out, "  }},");
+    }
+    let _ = writeln!(out, "]");
+    out
+}
+
+/// Codec-string case table: every sample-entry case plus every fixture entry
+/// (issue 0011). `decode_ok=false` rows only carry the entry-level decode
+/// outcome — the codec string step is skipped on purpose.
+fn codec_string_cases() -> Vec<(String, Vec<u8>)> {
+    let mut out: Vec<(String, Vec<u8>)> = sample_entry_cases()
+        .iter()
+        .map(|(name, input)| (name.to_string(), input.clone()))
+        .collect();
+    for (name, track_index, entry_index, bytes) in sample_entry_fixture_entries() {
+        out.push((
+            format!("{name}/track{track_index}/entry{entry_index}"),
+            bytes,
+        ));
+    }
+    out
+}
+
+/// One codec-string observation for the MoonBit differential test.
+struct CodecStringOutcome {
+    decode_ok: bool,
+    codec_string: Option<String>,
+    error_kind: &'static str,
+    reason: String,
+}
+
+fn codec_string_outcome(input: &[u8]) -> CodecStringOutcome {
+    let entry = match SampleEntry::decode(input) {
+        Ok((entry, _)) => entry,
+        Err(error) => {
+            return CodecStringOutcome {
+                decode_ok: false,
+                codec_string: None,
+                error_kind: error_kind_str(error.kind),
+                reason: error.reason,
+            };
+        }
+    };
+    match shiguredo_mp4::codec_string::from_sample_entry(&entry) {
+        Ok(s) => CodecStringOutcome {
+            decode_ok: true,
+            codec_string: Some(s),
+            error_kind: "",
+            reason: String::new(),
+        },
+        Err(error) => CodecStringOutcome {
+            decode_ok: true,
+            codec_string: None,
+            error_kind: error_kind_str(error.kind),
+            reason: error.reason,
+        },
+    }
+}
+
+/// Runs the codec-string case table and emits the normalised JSON.
+fn run_codec_string_cases() -> String {
+    let cases = codec_string_cases();
+    let mut items: Vec<String> = Vec::new();
+    for (name, input) in &cases {
+        let mut entry = format!("{{\"name\": ");
+        json_string(name, &mut entry);
+        let _ = write!(entry, ", \"input\": \"{}\", ", hex(input));
+        let outcome = codec_string_outcome(input);
+        let _ = write!(entry, "\"decode_ok\": {}", outcome.decode_ok);
+        match &outcome.codec_string {
+            Some(s) => {
+                entry.push_str(", \"codec_string\": ");
+                json_string(s, &mut entry);
+            }
+            None => {
+                let _ = write!(
+                    entry,
+                    ", \"codec_string\": null, \"error_kind\": \"{}\", \"reason\": {}",
+                    outcome.error_kind,
+                    json_string_to(&outcome.reason)
+                );
+            }
+        }
+        entry.push('}');
+        items.push(entry);
+    }
+    format!(
+        "{{\"schema\": {SCHEMA_VERSION}, \"upstream_sha\": \"{UPSTREAM_SHA}\", \"cases\": [{}]}}",
+        items.join(", ")
+    )
+}
+
+/// Emits the MoonBit case-table file consumed by
+/// `src/codec_string/codec_string_oracle_test.mbt`.
+fn codec_string_moonbit_cases() -> String {
+    let mut out = String::new();
+    let _ = writeln!(
+        out,
+        "// Generated by `cargo run -- codec-strings-cases --moonbit` (tools/oracle)."
+    );
+    let _ = writeln!(
+        out,
+        "// Source of truth: tools/oracle/src/main.rs (sample_entry_cases + SAMPLE_TABLE_FIXTURES)."
+    );
+    let _ = writeln!(out, "// Upstream: shiguredo/mp4-rs@{UPSTREAM_SHA}");
+    let _ = writeln!(
+        out,
+        "// DO NOT EDIT MANUALLY. Regenerate (canonical formatting is part of the file):"
+    );
+    let _ = writeln!(
+        out,
+        "//   (cd tools/oracle && cargo run -- codec-strings-cases --moonbit) \\"
+    );
+    let _ = writeln!(
+        out,
+        "//     > src/codec_string/codec_string_oracle_cases_test.mbt"
+    );
+    let _ = writeln!(out, "//   moon fmt");
+    let _ = writeln!(out);
+    let _ = writeln!(out, "///|");
+    let _ = writeln!(
+        out,
+        "/// `tools/oracle` の `codec-strings-cases` が返すケース表（生成物）。"
+    );
+    let _ = writeln!(out, "///");
+    let _ = writeln!(
+        out,
+        "/// 型は `src/codec_string/codec_string_oracle_test.mbt` で定義する。手で編集しない。"
+    );
+    let _ = writeln!(
+        out,
+        "let oracle_codec_string_cases : Array[OracleCodecStringCase] = ["
+    );
+    for (name, input) in &codec_string_cases() {
+        let outcome = codec_string_outcome(input);
+        let _ = writeln!(out, "  {{");
+        let _ = writeln!(out, "    name: {},", moonbit_string(name));
+        let _ = writeln!(out, "    input: {},", moonbit_bytes(input));
+        let _ = writeln!(
+            out,
+            "    decode_ok: {},",
+            if outcome.decode_ok { "true" } else { "false" }
+        );
+        match outcome.codec_string {
+            Some(s) => {
+                let _ = writeln!(out, "    codec_string: {},", moonbit_string(&s));
+                let _ = writeln!(out, "    error_kind: \"\",");
+                let _ = writeln!(out, "    reason: \"\",");
+            }
+            None => {
+                let _ = writeln!(out, "    codec_string: \"\",");
+                let _ = writeln!(out, "    error_kind: \"{}\",", outcome.error_kind);
+                let _ = writeln!(
+                    out,
+                    "    reason: {},",
+                    moonbit_string(&outcome.reason)
+                );
+            }
+        }
         let _ = writeln!(out, "  }},");
     }
     let _ = writeln!(out, "]");

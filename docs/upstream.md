@@ -141,6 +141,16 @@ Issue 0007 で確定した対応の補足:
 | （上流の decode と encode の非対称） | `avcC` profile が 66/77/88 以外で拡張フィールドなし → decode 成功・encode は `invalid_input "Missing 'chroma_format' field in 'avcC' box"` | oracle ケース `avc1_profile100_no_tail` で凍結。`Encode` でも `Mp4Error` を返すため同じ分類で再現する |
 | （対応型なし） | oracle `sample-entries` / `sample-entries-cases` / `sample-entries-fixtures`（`tools/oracle`） | 各 `stsd` entry を上流で再エンコードした `input` と凍結 snapshot を生成する。decode 成功・encode 失敗の組合せは `encode_error_kind`/`encode_error_reason` で表す。golden は `src/boxes/sample_entry_oracle_*.mbt` と差分比較 |
 
+### Issue 0011 で確定した対応の補足
+
+| 上流 | MoonBit 側 | 備考 |
+| --- | --- | --- |
+| `codec_string::from_sample_entry` | `from_sample_entry`（`src/codec_string`） | `SampleEntry` を受け取り `String` または `Mp4Error` を返す同名の自由関数。`Avc1`/`Hev1`/`Hvc1`/`Vp08`/`Vp09`/`Av01`/`Mp4a` は各 binding 形、`Opus`/`Flac` は 4CC のみを返す。`Unknown` は `unsupported "codec string is unsupported for unknown sample entry type `{4CC}`"`（上流文言を保持）。字幕系 `stpp`/`wvtt`/`tx3g` は 0028 まで `Unknown` 分類のため unsupported になる一時差 |
+| `codec_string` の書式規則 | 同名の内部 helper（`src/codec_string`） | `avc1` は 3 バイト小文字 hex（上流 `H264ProfileLevelId::to_hex` 相当をインライン化）、HEVC Annex E（profile space の `A`/`B`/`C`、compat の bit-reverse 大文字 hex 先頭ゼロ省略、tier `L`/`H`、48bit constraint の末尾ゼロ省略・最低 1 バイト）、AV1（`av01.<profile>.<level:02><tier>.<bitdepth:02>`、bit depth の `seq_profile`/`high_bitdepth`/`twelve_bit` 分岐）、VP（`<4CC>.PP.LL.DD` 十進 2 桁）、`mp4a.<OTI:02x>`（OTI `0x40` で AOT 追記、AOT 31 のエスケープ形式対応）。数値書式はすべて手続き的な固定桁 hex/dec で locale 非依存 |
+| `audio_object_type_from_asc` | 同名（`src/codec_string`、非公開） | ASC 先頭の `audioObjectType` のみ読む。空 ASC・AOT 31 の切り詰めは上流と同じ `invalid_data` 文言 |
+| `H264ProfileLevelId::to_hex` | `avc1_codec_string` 内の `hex_lower_padded` ×3（`src/codec_string`） | `H264ProfileLevelId` 自体は `src/bitstream`（Issue 0024）の範囲のため未移植。codec string に必要な `{:02x}{:02x}{:02x}` 部分だけを再現 |
+| （対応型なし） | oracle `codec-strings-cases`（`tools/oracle`） | 0010 の `sample_entry_cases` 全件 + 全 fixture entry を入力に、上流の `from_sample_entry` 出力（成功文字列または kind/reason）を凍結。`decode_ok=false` の行はエントリーの decode エラーを記録する。golden は `src/codec_string/codec_string_oracle_cases_test.mbt` と差分比較 |
+
 ### `boxes` / `codec_string` / `descriptors`
 
 | 上流 | 概要 | MoonBit 側の対応（予定） |
@@ -149,7 +159,7 @@ Issue 0007 で確定した対応の補足:
 | moov tree 群（`MoovBox` 〜 `TrexBox`） | movie/track/media/table box | `src/boxes`（`MoovBox` / `MvhdBox` / `TrakBox` / `TkhdBox` / `EdtsBox` / `ElstBox` / `MdiaBox` / `MdhdBox` / `HdlrBox` / `MinfBox` / `MediaHeader` / `DinfBox` / `DrefBox` / `UrlBox` は Issue 0008、`stbl` 配下の table 群は Issue 0009、いずれも完了。`mvex` / `mehd` / `trex` は 0017） |
 | sample entry 群（`SampleEntry`, `Avc1Box`, `Hvc1Box`, `Hev1Box`, `Vp08Box`, `Vp09Box`, `Av01Box`, `OpusBox`, `Mp4aBox`, `FlacBox`, `StppBox`, `WvttBox`, `Tx3gBox` ほか） | コーデック別 entry | `src/boxes`（映像・音声の型付き entry は Issue 0010 で完了。字幕系 `StppBox`/`WvttBox`/`Tx3gBox` は Issue 0028。それまでは `SampleEntry::Unknown` に分類される） |
 | fMP4 群（`MoofBox`, `TfhdBox`, `TrunBox`, `SidxBox`, `MfraBox` ほか） | fragment box | `src/boxes`（Issue 0017） |
-| `codec_string::generate_codecs_string` | RFC 6381 codecs 文字列 | `src/boxes`（Issue 0011） |
+| `codec_string::from_sample_entry` | RFC 6381 codecs 文字列 | `src/codec_string`（Issue 0011、完了。字幕系は 0028 まで `Unknown` 経由で unsupported） |
 | `descriptors::{EsDescriptor, DecoderConfigDescriptor, DecoderSpecificInfo, SlConfigDescriptor}` | MPEG-4 descriptor | `src/boxes`（Issue 0010 で `esds` とともに実装済み、0025 でも利用） |
 
 ### `demux` / `mux` / `bitstream`
@@ -210,6 +220,7 @@ Issue 0007 で確定した対応の補足:
 
 ## 7. 更新履歴
 
+- 2026-10-17: Issue 0011（codec string）の対応表を追記。`codec_string::from_sample_entry` → `src/codec_string` の同名関数、各 binding の書式規則（HEVC Annex E の bit-reverse / constraint 末尾省略、AV1 bit depth 分岐、AOT 31 エスケープ）、`H264ProfileLevelId` の未移植部分、字幕 entry の一時差（unsupported）、oracle `codec-strings-cases` を記録。
 - 2026-10-17: Issue 0010（型付き video/audio sample entry）の対応表を追記。`Uint<T,BITS,OFFSET>` の実行時フィールド化、`NonZeroU16`、u16.u16 unsigned ヘルパー、`Visual`/`AudioSampleEntryFields`、9 つの型付き `SampleEntry` variant と設定 box 群、descriptor/`EsdsBox`、字幕 entry の `Unknown` 継続（0028 までの一時差）、`avcC` decode/encode 非対称、oracle `sample-entries` 系モードを記録。
 - 2026-10-17: Issue 0009（stbl と SampleTableAccessor）の対応表を追記。`Either` と `src/box` の `BaseBox` 転送 impl（`pub extend` 不可の理由）、`SampleEntry` の unknown-only（0010 で型付き化）、`MinfBox::stbl_box` の必須化（0008 の一時差の解消）、非ジェネリック accessor（`AsRef` を移植しない意図的な差）、`SampleTableAccessorError` の対応、未規定の重複キー探索を差分対象外にして leftmost 固定する方針、oracle `sample-tables` 系モードを記録。
 - 2026-10-17: Issue 0008（moov tree と時刻情報）の対応表を追記。`Mp4FileTime` の秒保持、`Utf8String`/`LanguageCode`/`TrackKind`/`NonZeroU32` の対応、`mvex`/`stbl` の一時的な未知 box 扱い（`minf` が `stbl` を必須にしない一時差）、`HdlrBox::name` の生バイト保持、`track_kind()` ヘルパーと 8.8 unsigned ヘルパーを記録。`Mp4File` の追加先を 0013 に修正。

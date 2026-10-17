@@ -1,9 +1,9 @@
 # [P1 / M1] RFC 6381 codec stringをSampleEntryから生成する
 
-Status: polished
+Status: done
 Model: DeepSeek V4.1 Flash Free
 Created: 2026-10-16
-Updated: 2026-10-16
+Updated: 2026-10-17
 Branch: feat/0011-codec-strings
 Priority: P1
 Milestone: M1
@@ -62,14 +62,14 @@ Upstream baseline: [shiguredo/mp4-rs@1282b704f44184ec792e1549b5d31e0c4c54dc59](h
 
 ## 受け入れ条件
 
-- [ ] Given AVC High Profile Level 4.0 の `avc1` entry, when codec string を生成する, then `avc1.640028` が返る。
-- [ ] Given AAC-LC（OTI `0x40`、AOT 2）の `mp4a` entry, when 生成する, then `mp4a.40.2` が返る。
-- [ ] Given AV1 entry, when 生成する, then `av01.0.01M.08` 形式（profile / level / tier / bit depth）が golden と一致する。
-- [ ] Given HEVC・VP8/VP9・Opus・FLAC entry, when 生成する, then 上流 golden（`hev1.1.6.L93.B0`、`vp09.00.31.08`、4CC 等）と一致する。
-- [ ] Given `SampleEntry::Unknown`, when 生成する, then `Unsupported` 相当のエラーになり、正常文字列へ fallback しない。
-- [ ] Given `mp4a` で `DecoderSpecificInfo` 欠落または AOT 切り詰め, when 生成する, then `InvalidData` 相当のエラーになる。
-- [ ] Given 同一 entry, when JS と Native で生成する, then バイト単位で同一の文字列になる（locale 非依存）。
-- [ ] Given 同一 sample entry の golden, when 再生成する, then 実行ごとに同一の文字列になる（決定性）。
+- [x] Given AVC High Profile Level 4.0 の `avc1` entry, when codec string を生成する, then `avc1.640028` が返る。（unit test `avc1 produces RFC 6381 3-byte hex`、doc 例、oracle ケース `avc1_*`）
+- [x] Given AAC-LC（OTI `0x40`、AOT 2）の `mp4a` entry, when 生成する, then `mp4a.40.2` が返る。（oracle ケース `mp4a_basic`/`mp4a_esds_all_flags`/fixture `beep-aac-audio.mp4`、unit test）
+- [x] Given AV1 entry, when 生成する, then `av01.0.01M.08` 形式（profile / level / tier / bit depth）が golden と一致する。（oracle `av01_level1`→`av01.0.01M.08`、bit depth 分岐 `av01_profile2_12bit`/`av01_profile2_10bit`/`av01_high_bitdepth`、unit test）
+- [x] Given HEVC・VP8/VP9・Opus・FLAC entry, when 生成する, then 上流 golden（`hev1.1.6.L93.B0`、`vp09.00.31.08`、4CC 等）と一致する。（unit test で `hev1.1.6.L93.B0`/`vp09.00.31.08`/`vp08.00.31.08`/`Opus`/`fLaC` を固定。oracle は profile space `A`/`B`、compat=0、constraint 末尾省略・全ゼロを網羅）
+- [x] Given `SampleEntry::Unknown`, when 生成する, then `Unsupported` 相当のエラーになり、正常文字列へ fallback しない。（unit test + oracle `unknown_zzzz`、文言も上流と一致）
+- [x] Given `mp4a` で `DecoderSpecificInfo` 欠落または AOT 切り詰め, when 生成する, then `InvalidData` 相当のエラーになる。（oracle `mp4a_no_dsi`/`mp4a_asc_empty`/`mp4a_asc_truncated` + unit test）
+- [x] Given 同一 entry, when JS と Native で生成する, then バイト単位で同一の文字列になる（locale 非依存）。（`moon test --target js` / `--target native` で同一 golden 376/376 PASS。書式は手続き的固定桁で locale を使わない）
+- [x] Given 同一 sample entry の golden, when 再生成する, then 実行ごとに同一の文字列になる（決定性）。（凍結 golden `codec_string_oracle_cases_test.mbt` と差分比較。fixture golden も 9 件 unchanged）
 
 ## テスト計画
 
@@ -104,3 +104,7 @@ Upstream baseline: [shiguredo/mp4-rs@1282b704f44184ec792e1549b5d31e0c4c54dc59](h
 - 証跡ルール: checkbox は実際に実行した証拠がある項目だけ完了にする（0000 の進捗更新の規則 1）。
 - 実装時の未決事項: 公開関数名、字幕 entry（0028）の取り込み可否、golden の生成時期は 0004 と調整して確定する。
 - 2026-10-16: 本文を実装可能な形式へ整備し、実装に着手可能なため polished へ更新。
+- 2026-10-17: 実装確定内容を追記。新規パッケージ `src/codec_string` に上流と同名の `pub fn from_sample_entry(@boxes.SampleEntry) -> String raise @bytes.Mp4Error` を追加（公開 API はこの 1 関数のみ）。`avc1` は `avcC` 3 バイトの小文字 hex、HEVC は Annex E（space `A`/`B`/`C`、compat bit-reverse 大文字 hex 先頭ゼロ省略、tier `L`/`H`、48bit constraint 末尾ゼロ省略・最低 1 バイト）、AV1 は `av01.<profile>.<level:02><tier>.<bitdepth:02>`（`seq_profile`/`high_bitdepth`/`twelve_bit` の分岐）、VP は `<4CC>.PP.LL.DD` 十進 2 桁、`mp4a` は `mp4a.<OTI:02x>` + OTI `0x40` で AOT（ASC 先頭 5bit、31 は 5+6bit エスケープ）、`Opus`/`fLaC` は 4CC のみ。`Unknown` は `unsupported`、mp4a の DSI 欠落・ASC 空・AOT 31 切り詰めは `invalid_data`（上流文言を保持）。`H264ProfileLevelId` は未移植（0024）のため必要な hex 書式のみインライン化。字幕系は 0028 まで `Unknown` 経由で unsupported となる一時差。
+- 2026-10-17: oracle `codec-strings-cases` を追加。`sample_entry_cases` 全件 + 全 fixture entry を入力に上流 `from_sample_entry` の出力（成功文字列または kind/reason）を凍結し、`src/codec_string/codec_string_oracle_cases_test.mbt` として生成（`decode_ok=false` の行はエントリーの decode エラー）。63 ケース中に HEVC space `A`/`B`・compat=0・constraint 全ゼロ/末尾省略・high tier、AV1 の全 bit depth 分岐と `av01.0.01M.08`、`vp09.00.31.08`、AOT 31 エスケープ両経路（34/41）、`mp4a` の 3 エラーを含む。`sample-entries-cases` 表にも同 11 ケースが増えたため `sample_entry_oracle_cases_test.mbt` を再生成。
+- 2026-10-17: 証跡（unit）: `moon test` 376/376 PASS、`moon test --target js` 376/376、`moon test --target native` 376/376。新規テスト: black-box `codec_string_test.mbt` 8 件（全 codec 分岐、エラー 2 分類、4CC 大小文字、AOT 31 境界）+ oracle 差分 1 件 + doc 例 1 件。`moon check` / `moon check --target js` は warning 0。`moon fmt` / `moon info` 実施、`src/codec_string/pkg.generated.mbti` に `from_sample_entry` のみ公開を確認。`moon run tools/oracle/regenerate_fixtures.mbtx -- --check` は fixtures 9 unchanged / failures 0。
+- 2026-10-17: 実装・検証・ドキュメントの全項目を完了し、done へ移行。
