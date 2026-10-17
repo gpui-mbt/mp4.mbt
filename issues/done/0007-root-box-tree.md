@@ -1,9 +1,9 @@
 # [P0 / M1] ftyp・mdat・free・UnknownBoxとBox treeを実装する
 
-Status: polished
+Status: done
 Model: DeepSeek V4.1 Flash Free
 Created: 2026-10-16
-Updated: 2026-10-16
+Updated: 2026-10-17
 Branch: feat/0007-root-box-tree
 Priority: P0
 Milestone: M1
@@ -101,3 +101,8 @@ box headerから表示可能なルート構造を得る。未知のboxも捨て�
 - 実装時の未決事項: visitorの名称、limit既定値、canonical/wire-preservingのAPI形、公開名。確定後は本issueへ追記する。
 - 上流`UnknownBox::decode_top_level`のsize==0挙動は、本issueのtop-level走査として移植する。
 - 2026-10-16: 本文を実装可能な形式へ整備し、実装に着手可能なため polished へ更新。
+- 2026-10-17: src/boxes（FtypBox/FreeBox/MdatBox/UnknownBox/RootBox・BoxNode tree走査）とsrc/bytes拡張（with_box_type/ReadCursor::from_view）を実装し、oracle box-tree系モードと生成物2ファイル、CI検証、unit/differentialテストを追加
+- 2026-10-17: 実装・検証・ドキュメント更新・CI検証を完了し、done へ移行。詳細な証跡は注記に追記する。
+- 2026-10-17: 設計確定: `BoxTreeOptions{max_depth, max_nodes, is_container}`（既定は `ParseLimits.max_nesting_depth`=64 と `DEFAULT_MAX_BOX_TREE_NODES`=65536、`with_max_depth`/`with_max_nodes`/`with_container_predicate` で変更可）。コンテナは前置フィールドを持たない箱（moov/trak/mdia/minf/stbl/edts/dinf/mvex/moof/traf/mfra/udta）だけで、stsd/meta/sample entry は後続 Issue で型付きに扱う。入れ子の size==0 は `InvalidData`（"size=0 box is only allowed at the top level"）、深さ・ノード数上限超過は `Unsupported`。payload は保持せず `mdat` は `data_offset`/`data_size` の範囲のみ。`UnknownBox::decode` は size==0 を拒否（上流と同じ "UnknownBox does not accept size=0"）し、`decode_top_level` は受理して wire-preserving に再 encode。`RootBox::Mdat` の encode は payload 非保持のため `Unsupported`（上流との意図的な差。docs/upstream.md に記録）
+- 2026-10-17: 証跡: moon check（native/js）警告 0、moon test --target native 152 件 PASS、--target js 152 件 PASS、moon fmt --check 差分なし、moon info 更新済み（src/boxes/pkg.generated.mbti 新規、src/bytes に with_box_type / ReadCursor::from_view 追加）。unit: ftyp/free/mdat/unknown/root の decode→encode 往復（largesize 入力の canonical 化と wire-preserving の区別を含む）、エラー分類とカーソル rollback、未知 top-level size==0 の受理・入れ子拒否、親境界超過、64KiB mdat + ParseLimits(max_allocation_size=16) で payload 非保持、dump 行の文字列まで固定
+- 2026-10-17: Differential: tools/oracle に `box-tree` / `box-tree-cases` / `box-tree-fixtures` を追加。固定 SHA の上流 `BoxHeader` で観測した depth / box_type / start / header_bytes / declared_size / total_size と MoonBit の `flatten_box_tree` を 20 境界ケース + 埋め込み fixture 2 件（black-h264-video.mp4 / black-h264-fmp4.mp4、`include_bytes!` で固定）で比較し一致。`ftyp` は上流 `FtypBox::decode` の値と比較。cargo test 7 件 PASS。生成物 src/boxes/box_tree_oracle_cases_test.mbt / box_tree_oracle_fixtures_test.mbt は再生成→moon fmt で byte 一致し、CI は再生成→moon fmt→git diff で検証する（docs/ci.md 更新）

@@ -146,6 +146,37 @@ pub fn Mp4Error::with_box_type(
 }
 
 ///|
+/// `f` の失敗に、まだボックス種別が設定されていなければ `box_type` を付けて返す。
+///
+/// 型付きボックスのデコードで、失敗の原因となった（最初の）ボックスの種別を
+/// エラーへ残すために使う。上流 `shiguredo_mp4::boxes::with_box_type` に対応する。
+///
+/// ```mbt check
+/// test {
+///   let box_type = @bytes.BoxType::Normal(
+///     @bytes.FourCC::from_bytes(b"moov") catch {
+///       _ => abort("4 bytes")
+///     },
+///   )
+///   let run : () -> Unit raise @bytes.Mp4Error = fn() raise @bytes.Mp4Error {
+///     raise @bytes.Mp4Error::invalid_data("bad")
+///   }
+///   @bytes.with_box_type(box_type, run) catch {
+///     @bytes.Mp4Error(box_type=Some(_), ..) => ()
+///     _ => fail("box type must be attached")
+///   }
+/// }
+/// ```
+pub fn[T] with_box_type(
+  box_type : BoxType,
+  f : () -> T raise Mp4Error,
+) -> T raise Mp4Error {
+  f() catch {
+    error => raise error.with_box_type(box_type)
+  }
+}
+
+///|
 /// エラーを `[{ボックス種別}] {分類}: {理由}{位置} (at {発生位置})` 形式に整形する。
 pub fn Mp4Error::to_string(self : Mp4Error) -> String {
   match self {

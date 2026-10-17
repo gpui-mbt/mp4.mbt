@@ -23,6 +23,8 @@ pub fn uint64_to_exact_double(UInt64, loc~ : SourceLoc) -> Double raise Mp4Error
 #callsite(autofill(loc))
 pub fn uint64_to_index(UInt64, StringView, loc~ : SourceLoc) -> Int raise Mp4Error
 
+pub fn[T] with_box_type(BoxType, () -> T raise Mp4Error) -> T raise Mp4Error
+
 // Errors
 pub(all) suberror FourCCError {
   InvalidLength(length~ : Int)
@@ -125,6 +127,7 @@ pub struct ReadCursor {
 }
 pub fn ReadCursor::base_offset(Self) -> UInt64
 pub fn ReadCursor::data(Self) -> BytesView
+pub fn ReadCursor::from_view(BytesView, UInt64, limits? : ParseLimits) -> Self
 pub fn ReadCursor::is_empty(Self) -> Bool
 pub fn ReadCursor::length(Self) -> Int
 pub fn ReadCursor::limits(Self) -> ParseLimits

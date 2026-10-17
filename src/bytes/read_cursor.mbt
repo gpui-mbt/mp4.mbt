@@ -184,6 +184,34 @@ pub fn ReadCursor::read_u64(self : ReadCursor) -> UInt64 raise Mp4Error {
 }
 
 ///|
+/// 既存の [`BytesView`] をバッファとして読むカーソルを作る。
+///
+/// バイト列はコピーせず view を共有する。`base_offset` には view の先頭が
+/// ファイル内で持つ位置を渡す。型付きボックスのペイロードのように、既に切り出された
+/// 範囲を追加のコピーなしで読むために使う。`limits` を省略すると既定値になるため、
+/// 呼び出し元のカーソルから引き継ぐ場合は明示的に渡す。
+///
+/// ```mbt check
+/// test {
+///   let cursor = @bytes.ReadCursor::from_view(b"abcd"[:], 16UL)
+///   inspect(cursor.offset(), content="16")
+///   inspect(cursor.read_u16(), content="24930")
+/// }
+/// ```
+pub fn ReadCursor::from_view(
+  view : BytesView,
+  base_offset : UInt64,
+  limits? : ParseLimits,
+) -> ReadCursor {
+  {
+    data: view,
+    position: 0,
+    base_offset,
+    limits: limits.unwrap_or(ParseLimits::default()),
+  }
+}
+
+///|
 /// 符号付き 8-bit を読む（2 の補数、符号拡張あり）。
 pub fn ReadCursor::read_i8(self : ReadCursor) -> Int32 raise Mp4Error {
   let value = self.read_u8()

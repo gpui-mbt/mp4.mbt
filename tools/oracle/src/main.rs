@@ -20,7 +20,7 @@ use std::path::Path;
 use std::process::ExitCode;
 
 use shiguredo_mp4::demux::{DemuxError, Input, Mp4FileDemuxer, Mp4FileKind, Mp4FileKindDetector};
-use shiguredo_mp4::{BaseBox, BoxHeader, BoxSize, Encode, TrackKind};
+use shiguredo_mp4::{BaseBox, BoxHeader, BoxSize, Decode, Encode, TrackKind};
 
 /// Pinned upstream revision (must match Cargo.toml and docs/upstream.md).
 const UPSTREAM_SHA: &str = "1282b704f44184ec792e1549b5d31e0c4c54dc59";
@@ -55,10 +55,36 @@ fn main() -> ExitCode {
             print!("{}", box_header_moonbit_cases());
             ExitCode::SUCCESS
         }
+        Some("box-tree") if args.len() == 3 => match run_box_tree(&args[2]) {
+            Ok(json) => {
+                println!("{json}");
+                ExitCode::SUCCESS
+            }
+            Err(e) => {
+                eprintln!("oracle error: {e}");
+                ExitCode::FAILURE
+            }
+        },
+        Some("box-tree-cases") if args.len() == 2 => {
+            println!("{}", run_box_tree_cases());
+            ExitCode::SUCCESS
+        }
+        Some("box-tree-cases") if args.len() == 3 && args[2] == "--moonbit" => {
+            print!("{}", box_tree_moonbit_cases());
+            ExitCode::SUCCESS
+        }
+        Some("box-tree-fixtures") if args.len() == 3 && args[2] == "--moonbit" => {
+            print!("{}", box_tree_moonbit_fixtures());
+            ExitCode::SUCCESS
+        }
         _ => {
             eprintln!("usage: mp4-oracle demux <mp4-file>");
             eprintln!("       mp4-oracle box-headers");
             eprintln!("       mp4-oracle box-headers --moonbit");
+            eprintln!("       mp4-oracle box-tree <mp4-file>");
+            eprintln!("       mp4-oracle box-tree-cases");
+            eprintln!("       mp4-oracle box-tree-cases --moonbit");
+            eprintln!("       mp4-oracle box-tree-fixtures --moonbit");
             ExitCode::from(2)
         }
     }
@@ -632,6 +658,518 @@ fn moonbit_bytes(data: &[u8]) -> String {
     out
 }
 
+/// Default maximum box-tree depth (top level is 1). Mirrors
+/// `@bytes.DEFAULT_MAX_NESTING_DEPTH` and `@boxes.BoxTreeOptions::new`.
+const DEFAULT_MAX_BOX_TREE_DEPTH: i32 = 64;
+
+/// Default maximum total node count. Mirrors `@boxes.DEFAULT_MAX_BOX_TREE_NODES`.
+const DEFAULT_MAX_BOX_TREE_NODES: i32 = 65_536;
+
+/// Box types whose payload is a plain sequence of child boxes. Mirrors
+/// `@boxes.is_plain_container_box_type` (`src/boxes/box_node.mbt`).
+///
+/// `stsd` / `meta` (prefix fields) and sample entries (children start after
+/// fixed fields) are intentionally not included.
+fn is_plain_container_box_type(box_type: &[u8]) -> bool {
+    const CONTAINERS: &[&[u8]] = &[
+        b"moov", b"trak", b"mdia", b"minf", b"stbl", b"edts", b"dinf", b"mvex", b"moof", b"traf",
+        b"mfra", b"udta",
+    ];
+    CONTAINERS.contains(&box_type)
+}
+
+/// One node of the header-level box-tree walk (pre-order, flattened).
+struct BoxTreeNode {
+    depth: i32,
+    box_type: Vec<u8>,
+    start: u64,
+    header_bytes: i32,
+    declared_size: u64,
+    total_size: u64,
+}
+
+/// Box-tree walk result shared by the JSON and MoonBit emitters.
+enum BoxTreeOutcome {
+    Ok(Vec<BoxTreeNode>),
+    Err(&'static str),
+}
+
+/// Walks the whole buffer with the default limits.
+fn walk_box_tree(data: &[u8]) -> BoxTreeOutcome {
+    let mut nodes = Vec::new();
+    let mut node_count = 0i32;
+    match walk_box_tree_into(data, 0, 1, &mut node_count, &mut nodes) {
+        Ok(()) => BoxTreeOutcome::Ok(nodes),
+        Err(kind) => BoxTreeOutcome::Err(error_kind_str(kind)),
+    }
+}
+
+/// Header-level walk mirroring `@boxes.build_box_tree`:
+///
+/// - `size==0` is only allowed at the top level (`invalid_data` otherwise);
+/// - only plain containers are descended into (`unsupported` past the depth
+///   limit, counted against the node budget);
+/// - payload bytes are never retained, only their range.
+fn walk_box_tree_into(
+    data: &[u8],
+    base: u64,
+    depth: i32,
+    node_count: &mut i32,
+    out: &mut Vec<BoxTreeNode>,
+) -> Result<(), shiguredo_mp4::ErrorKind> {
+    use shiguredo_mp4::ErrorKind;
+
+    let mut rest = data;
+    let mut offset = base;
+    while !rest.is_empty() {
+        let (header, payload) = BoxHeader::decode_header_and_payload(rest).map_err(|e| e.kind)?;
+        let header_bytes = header.external_size();
+        let declared_size = header.box_size.get();
+        let total_size = header_bytes as u64 + payload.len() as u64;
+        let box_type = header.box_type.as_bytes().to_vec();
+        if depth > 1 && declared_size == 0 {
+            return Err(ErrorKind::InvalidData);
+        }
+        *node_count += 1;
+        if *node_count > DEFAULT_MAX_BOX_TREE_NODES {
+            return Err(ErrorKind::Unsupported);
+        }
+        out.push(BoxTreeNode {
+            depth,
+            box_type: box_type.clone(),
+            start: offset,
+            header_bytes: header_bytes as i32,
+            declared_size,
+            total_size,
+        });
+        if is_plain_container_box_type(&box_type) && !payload.is_empty() {
+            if depth >= DEFAULT_MAX_BOX_TREE_DEPTH {
+                return Err(ErrorKind::Unsupported);
+            }
+            walk_box_tree_into(
+                payload,
+                offset + header_bytes as u64,
+                depth + 1,
+                node_count,
+                out,
+            )?;
+        }
+        rest = &rest[total_size as usize..];
+        offset += total_size;
+    }
+    Ok(())
+}
+
+/// `ftyp` fields decoded by the upstream `FtypBox` (null when absent/invalid).
+fn ftyp_json(data: &[u8]) -> String {
+    if data.len() < 8 || &data[4..8] != b"ftyp" {
+        return "null".to_owned();
+    }
+    match shiguredo_mp4::boxes::FtypBox::decode(data) {
+        Ok((ftyp, _)) => {
+            let major = ftyp.major_brand.get();
+            let brands: Vec<String> = ftyp
+                .compatible_brands
+                .iter()
+                .map(|b| json_string_to(&fourcc_display(b.get())))
+                .collect();
+            format!(
+                "{{\"major_brand\": {}, \"major_brand_hex\": \"{}\", \"minor_version\": \"{}\", \"compatible_brands\": [{}]}}",
+                json_string_to(&fourcc_display(major)),
+                hex(&major),
+                ftyp.minor_version,
+                brands.join(", "),
+            )
+        }
+        Err(_) => "null".to_owned(),
+    }
+}
+
+/// Renders a 4-byte code as a string when it is printable ASCII, hex otherwise.
+fn fourcc_display(code: [u8; 4]) -> String {
+    if code.iter().all(|b| (0x20..=0x7e).contains(b)) {
+        String::from_utf8_lossy(&code).into_owned()
+    } else {
+        hex(&code)
+    }
+}
+
+fn box_tree_node_json(node: &BoxTreeNode) -> String {
+    format!(
+        "{{\"depth\": {}, \"type\": {}, \"type_hex\": \"{}\", \"start\": \"{}\", \"header_bytes\": {}, \"declared_size\": \"{}\", \"total_size\": \"{}\"}}",
+        node.depth,
+        json_string_to(&String::from_utf8_lossy(&node.box_type)),
+        hex(&node.box_type),
+        node.start,
+        node.header_bytes,
+        node.declared_size,
+        node.total_size,
+    )
+}
+
+fn box_tree_nodes_json(nodes: &[BoxTreeNode]) -> String {
+    let items: Vec<String> = nodes.iter().map(box_tree_node_json).collect();
+    format!("[{}]", items.join(", "))
+}
+
+fn box_tree_json(data: &[u8]) -> String {
+    let tree = match walk_box_tree(data) {
+        BoxTreeOutcome::Ok(nodes) => format!(
+            "{{\"status\": \"ok\", \"nodes\": {}}}",
+            box_tree_nodes_json(&nodes)
+        ),
+        BoxTreeOutcome::Err(kind) => {
+            format!("{{\"status\": \"error\", \"error_kind\": \"{kind}\"}}")
+        }
+    };
+    format!("{{\"ftyp\": {}, \"tree\": {tree}}}", ftyp_json(data))
+}
+
+/// Runs the header-level box-tree walk over a file and prints the golden JSON.
+fn run_box_tree(path: &str) -> Result<String, String> {
+    let data = fs::read(path).map_err(|e| format!("failed to read {path}: {e}"))?;
+    let name = Path::new(path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("unknown")
+        .to_owned();
+
+    let mut input = String::from("{");
+    input.push_str("\"name\": ");
+    json_string(&name, &mut input);
+    let _ = write!(input, ", \"size\": \"{}\", \"sha256\": ", data.len());
+    json_string(&sha256_hex(&data), &mut input);
+    input.push('}');
+
+    let parts = [
+        format!("  \"schema_version\": {SCHEMA_VERSION}"),
+        format!("  \"upstream_sha\": \"{UPSTREAM_SHA}\""),
+        format!("  \"input\": {input}"),
+        format!("  \"box_tree\": {}", box_tree_json(&data)),
+    ];
+    Ok(format!("{{\n{}\n}}\n", parts.join(",\n")))
+}
+
+/// Synthetic box-tree boundary cases shared with the MoonBit differential test
+/// (`src/boxes/box_tree_oracle_test.mbt`).
+///
+/// Changing this table changes the generated MoonBit case file; regenerate it
+/// with:
+///   (cd tools/oracle && cargo run -- box-tree-cases --moonbit) \
+///     > src/boxes/box_tree_oracle_cases_test.mbt
+fn box_tree_cases() -> Vec<(&'static str, Vec<u8>)> {
+    fn box_with(box_type: &[u8; 4], payload: &[u8]) -> Vec<u8> {
+        let mut out = Vec::with_capacity(8 + payload.len());
+        out.extend_from_slice(&((8 + payload.len()) as u32).to_be_bytes());
+        out.extend_from_slice(box_type);
+        out.extend_from_slice(payload);
+        out
+    }
+
+    fn nested_box(box_type: &[u8; 4], levels: u32) -> Vec<u8> {
+        let mut current = box_with(box_type, &[]);
+        for _ in 1..levels {
+            current = box_with(box_type, &current);
+        }
+        current
+    }
+
+    let mut ftyp = Vec::new();
+    ftyp.extend_from_slice(b"\x00\x00\x00\x18ftypisom\x00\x00\x02\x00isomavc1");
+    let mut ftyp_no_brands = Vec::new();
+    ftyp_no_brands.extend_from_slice(b"\x00\x00\x00\x10ftypav01\x00\x00\x00\x00");
+    let mut free = box_with(b"free", &[0x00, 0x00, 0x00, 0x00]);
+    let mut mdat = box_with(b"mdat", &[0x11, 0x22, 0x33, 0x44]);
+
+    vec![
+        ("empty_input", Vec::new()),
+        (
+            "ftyp_free_mdat",
+            {
+                let mut v = ftyp.clone();
+                v.append(&mut free);
+                v.append(&mut mdat);
+                v
+            },
+        ),
+        ("ftyp_no_brands", ftyp_no_brands),
+        ("unknown_top_level_size0", b"\x00\x00\x00\x00zzzz\xAA\xBB".to_vec()),
+        ("unknown_top_level_size0_empty", b"\x00\x00\x00\x00zzzz".to_vec()),
+        ("mdat_top_level_size0", b"\x00\x00\x00\x00mdat\x11\x22\x33".to_vec()),
+        (
+            "unknown_nested_size0",
+            box_with(b"moov", b"\x00\x00\x00\x00zzzz"),
+        ),
+        (
+            "unknown_nested_ok",
+            box_with(b"moov", &box_with(b"zzzz", &[0xAA, 0xBB])),
+        ),
+        (
+            "known_nested_size0_rejected",
+            box_with(b"moov", b"\x00\x00\x00\x00free"),
+        ),
+        (
+            "child_declared_size_below_header",
+            box_with(b"moov", b"\x00\x00\x00\x04zzzz"),
+        ),
+        (
+            "child_exceeds_parent",
+            box_with(b"moov", b"\x00\x00\x00\x0Czzzz"),
+        ),
+        ("truncated_top_level_header", b"\x00\x00\x00\x10".to_vec()),
+        (
+            "moov_trak_mdia_nesting",
+            box_with(b"moov", &box_with(b"trak", &box_with(b"mdia", &[]))),
+        ),
+        (
+            "moov_empty_payload",
+            b"\x00\x00\x00\x08moov".to_vec(),
+        ),
+        ("skip_unknown_top_level", b"\x00\x00\x00\x0Cskip\x00\x00\x00\x00".to_vec()),
+        (
+            "uuid_unknown_top_level",
+            b"\x00\x00\x00\x20uuid\x6B\xC0\xA5\xA1\x8B\x2E\x4A\x71\xB0\x2C\xD0\x5B\x8B\x1B\x3F\x9F\x00\x00\x00\x00\x00\x00\x00\x08".to_vec(),
+        ),
+        (
+            "free_largesize",
+            b"\x00\x00\x00\x01free\x00\x00\x00\x00\x00\x00\x00\x14\x00\x00\x00\x00".to_vec(),
+        ),
+        (
+            "free_payload_not_interpreted",
+            box_with(b"free", &box_with(b"zzzz", &[0x01, 0x02])),
+        ),
+        (
+            "unknown_largesize_nested",
+            box_with(
+                b"moov",
+                b"\x00\x00\x00\x01zzzz\x00\x00\x00\x00\x00\x00\x00\x12\xAA\xBB",
+            ),
+        ),
+        ("nested_beyond_depth_limit", nested_box(b"moov", 65)),
+    ]
+}
+
+/// Runs the fixed box-tree case table and emits the normalised JSON.
+fn run_box_tree_cases() -> String {
+    let cases = box_tree_cases();
+    let mut items: Vec<String> = Vec::new();
+    for (name, input) in &cases {
+        let mut entry = format!(
+            "{{\"name\": \"{name}\", \"input\": \"{}\"",
+            hex(input)
+        );
+        match walk_box_tree(input) {
+            BoxTreeOutcome::Ok(nodes) => {
+                let _ = write!(
+                    entry,
+                    ", \"ok\": true, \"nodes\": {}",
+                    box_tree_nodes_json(&nodes)
+                );
+            }
+            BoxTreeOutcome::Err(kind) => {
+                let _ = write!(entry, ", \"ok\": false, \"error_kind\": \"{kind}\"");
+            }
+        }
+        entry.push('}');
+        items.push(entry);
+    }
+    format!(
+        "{{\"schema\": {SCHEMA_VERSION}, \"upstream_sha\": \"{UPSTREAM_SHA}\", \"cases\": [{}]}}",
+        items.join(", ")
+    )
+}
+
+/// Emits the MoonBit case-table file consumed by
+/// `src/boxes/box_tree_oracle_test.mbt`.
+fn box_tree_moonbit_cases() -> String {
+    let mut out = String::new();
+    let _ = writeln!(
+        out,
+        "// Generated by `cargo run -- box-tree-cases --moonbit` (tools/oracle)."
+    );
+    let _ = writeln!(
+        out,
+        "// Source of truth: tools/oracle/src/main.rs (box_tree_cases)."
+    );
+    let _ = writeln!(out, "// Upstream: shiguredo/mp4-rs@{UPSTREAM_SHA}");
+    let _ = writeln!(
+        out,
+        "// DO NOT EDIT MANUALLY. Regenerate (canonical formatting is part of the file):"
+    );
+    let _ = writeln!(
+        out,
+        "//   (cd tools/oracle && cargo run -- box-tree-cases --moonbit) \\"
+    );
+    let _ = writeln!(out, "//     > src/boxes/box_tree_oracle_cases_test.mbt");
+    let _ = writeln!(out, "//   moon fmt");
+    let _ = writeln!(out);
+    let _ = writeln!(out, "///|");
+    let _ = writeln!(
+        out,
+        "/// `tools/oracle` の `box-tree-cases` が返すケース表（生成物）。"
+    );
+    let _ = writeln!(
+        out,
+        "///"
+    );
+    let _ = writeln!(
+        out,
+        "/// 型は `src/boxes/box_tree_oracle_test.mbt` で定義する。手で編集しない。"
+    );
+    let _ = writeln!(
+        out,
+        "let oracle_box_tree_cases : Array[OracleBoxTreeCase] = ["
+    );
+    for (name, input) in &box_tree_cases() {
+        let _ = writeln!(out, "  {{");
+        let _ = writeln!(out, "    name: \"{name}\",");
+        let _ = writeln!(out, "    input: {},", moonbit_bytes(input));
+        match walk_box_tree(input) {
+            BoxTreeOutcome::Ok(nodes) => {
+                let _ = writeln!(out, "    ok: true,");
+                let _ = writeln!(out, "    nodes: [");
+                for node in &nodes {
+                    write_moonbit_node(&mut out, node);
+                }
+                let _ = writeln!(out, "    ],");
+                let _ = writeln!(out, "    error_kind: \"\",");
+            }
+            BoxTreeOutcome::Err(kind) => {
+                let _ = writeln!(out, "    ok: false,");
+                let _ = writeln!(out, "    nodes: [],");
+                let _ = writeln!(out, "    error_kind: \"{kind}\",");
+            }
+        }
+        let _ = writeln!(out, "  }},");
+    }
+    let _ = writeln!(out, "]");
+    out
+}
+
+fn write_moonbit_node(out: &mut String, node: &BoxTreeNode) {
+    let _ = writeln!(out, "      {{");
+    let _ = writeln!(out, "        depth: {},", node.depth);
+    let _ = writeln!(out, "        box_type: {},", moonbit_bytes(&node.box_type));
+    let _ = writeln!(out, "        start: {}UL,", node.start);
+    let _ = writeln!(out, "        header_bytes: {},", node.header_bytes);
+    let _ = writeln!(out, "        declared_size: {}UL,", node.declared_size);
+    let _ = writeln!(out, "        total_size: {}UL,", node.total_size);
+    let _ = writeln!(out, "      }},");
+}
+
+/// Fixtures embedded (with `include_bytes!`) in the generated MoonBit
+/// differential test. The bytes are the checked-in upstream fixtures, so the
+/// regenerated file changes exactly when a fixture changes.
+const BOX_TREE_FIXTURES: &[(&str, &[u8])] = &[
+    (
+        "black-h264-video.mp4",
+        include_bytes!("../../../tests/fixtures/upstream/black-h264-video.mp4"),
+    ),
+    (
+        "black-h264-fmp4.mp4",
+        include_bytes!("../../../tests/fixtures/upstream/black-h264-fmp4.mp4"),
+    ),
+];
+
+/// Emits the fixture differential data consumed by
+/// `src/boxes/box_tree_oracle_test.mbt`.
+fn box_tree_moonbit_fixtures() -> String {
+    let mut out = String::new();
+    let _ = writeln!(
+        out,
+        "// Generated by `cargo run -- box-tree-fixtures --moonbit` (tools/oracle)."
+    );
+    let _ = writeln!(
+        out,
+        "// Source of truth: tools/oracle/src/main.rs (BOX_TREE_FIXTURES)."
+    );
+    let _ = writeln!(out, "// Fixtures (bytes embedded with include_bytes!):");
+    for (name, data) in BOX_TREE_FIXTURES {
+        let _ = writeln!(
+            out,
+            "//   {name} ({} bytes, sha256 {})",
+            data.len(),
+            sha256_hex(data)
+        );
+    }
+    let _ = writeln!(out, "// Upstream: shiguredo/mp4-rs@{UPSTREAM_SHA}");
+    let _ = writeln!(
+        out,
+        "// DO NOT EDIT MANUALLY. Regenerate (canonical formatting is part of the file):"
+    );
+    let _ = writeln!(
+        out,
+        "//   (cd tools/oracle && cargo run -- box-tree-fixtures --moonbit) \\"
+    );
+    let _ = writeln!(out, "//     > src/boxes/box_tree_oracle_fixtures_test.mbt");
+    let _ = writeln!(out, "//   moon fmt");
+    let _ = writeln!(out);
+    let _ = writeln!(out, "///|");
+    let _ = writeln!(
+        out,
+        "/// `tools/oracle` の `box-tree-fixtures` が返す fixture 走査（生成物）。"
+    );
+    let _ = writeln!(
+        out,
+        "///"
+    );
+    let _ = writeln!(
+        out,
+        "/// 型は `src/boxes/box_tree_oracle_test.mbt` で定義する。手で編集しない。"
+    );
+    let _ = writeln!(
+        out,
+        "let oracle_box_tree_fixtures : Array[OracleBoxTreeFixture] = ["
+    );
+    for (name, data) in BOX_TREE_FIXTURES {
+        let _ = writeln!(out, "  {{");
+        let _ = writeln!(out, "    name: \"{name}\",");
+        let _ = writeln!(out, "    input: {},", moonbit_bytes(data));
+        match walk_box_tree(data) {
+            BoxTreeOutcome::Ok(nodes) => {
+                let _ = writeln!(out, "    nodes: [");
+                for node in &nodes {
+                    write_moonbit_node(&mut out, node);
+                }
+                let _ = writeln!(out, "    ],");
+            }
+            BoxTreeOutcome::Err(kind) => {
+                let _ = writeln!(
+                    out,
+                    "    nodes: [], // oracle walk failed: {kind}"
+                );
+            }
+        }
+        let _ = writeln!(out, "    ftyp: {},", ftyp_moonbit(data));
+        let _ = writeln!(out, "  }},");
+    }
+    let _ = writeln!(out, "]");
+    out
+}
+
+/// Renders the upstream `FtypBox` fields as MoonBit data (or `None`).
+fn ftyp_moonbit(data: &[u8]) -> String {
+    if data.len() < 8 || &data[4..8] != b"ftyp" {
+        return "None".to_owned();
+    }
+    match shiguredo_mp4::boxes::FtypBox::decode(data) {
+        Ok((ftyp, _)) => {
+            let brands: Vec<String> = ftyp
+                .compatible_brands
+                .iter()
+                .map(|b| moonbit_bytes(&b.get()))
+                .collect();
+            format!(
+                "Some({{ major_brand: {}, minor_version: {}U, compatible_brands: [{}] }})",
+                moonbit_bytes(&ftyp.major_brand.get()),
+                ftyp.minor_version,
+                brands.join(", "),
+            )
+        }
+        Err(_) => "None".to_owned(),
+    }
+}
+
 fn hex(data: &[u8]) -> String {
     let mut out = String::with_capacity(data.len() * 2);
     for byte in data {
@@ -666,6 +1204,76 @@ mod tests {
         assert!(json.contains(
             "\"size_kind\": \"u64\", \"size\": \"40\", \"external_size\": 32, \"payload_size\": 8"
         ));
+    }
+
+    #[test]
+    fn box_tree_cases_output_is_deterministic_and_covers_boundaries() {
+        let json = run_box_tree_cases();
+        assert_eq!(json, run_box_tree_cases());
+        // トップレベル size==0 は末尾までを 1 ノードとして受理する
+        assert!(json.contains(
+            "\"name\": \"unknown_top_level_size0\", \"input\": \"000000007a7a7a7aaabb\", \"ok\": true"
+        ));
+        // 入れ子 size==0 は invalid_data
+        assert!(json.contains("\"name\": \"unknown_nested_size0\", \"input\": \"000000106d6f6f76000000007a7a7a7a\", \"ok\": false, \"error_kind\": \"invalid_data\""));
+        // 親境界を超える子は insufficient_buffer
+        assert!(json.contains("\"name\": \"child_exceeds_parent\", \"input\": \"000000106d6f6f760000000c7a7a7a7a\", \"ok\": false, \"error_kind\": \"insufficient_buffer\""));
+        // ヘッダー未満の子サイズは invalid_input
+        assert!(json.contains("\"name\": \"child_declared_size_below_header\", \"input\": \"000000106d6f6f76000000047a7a7a7a\", \"ok\": false, \"error_kind\": \"invalid_input\""));
+        // 深さ上限は unsupported
+        assert!(json.contains("\"name\": \"nested_beyond_depth_limit\""));
+        assert!(json.contains("\"name\": \"nested_beyond_depth_limit\", \"input\": \""));
+        // 入れ子 (moov > trak > mdia) は 3 レベルとして観測する
+        assert!(json.contains(
+            "\"name\": \"moov_trak_mdia_nesting\", \"input\": \"000000186d6f6f76000000107472616b000000086d646961\", \"ok\": true"
+        ));
+        assert!(json.contains("\"depth\": 3, \"type\": \"mdia\""));
+        // free の payload は子として解釈しない (depth 2 の zzzz が現れない)
+        let free_case = json
+            .split("\"name\": \"free_payload_not_interpreted\"")
+            .nth(1)
+            .expect("case present");
+        assert!(!free_case[..free_case.find("\"name\": \"").unwrap_or(free_case.len())]
+            .contains("\"depth\": 2"));
+    }
+
+    #[test]
+    fn box_tree_cases_cover_every_outcome_kind() {
+        let json = run_box_tree_cases();
+        for kind in [
+            "invalid_input",
+            "invalid_data",
+            "insufficient_buffer",
+            "unsupported",
+        ] {
+            assert!(
+                json.contains(&format!("\"error_kind\": \"{kind}\"")),
+                "missing error kind {kind}"
+            );
+        }
+    }
+
+    #[test]
+    fn box_tree_moonbit_output_is_deterministic() {
+        assert_eq!(box_tree_moonbit_cases(), box_tree_moonbit_cases());
+        assert_eq!(box_tree_moonbit_fixtures(), box_tree_moonbit_fixtures());
+    }
+
+    #[test]
+    fn box_tree_fixture_trees_are_walkable() {
+        for (name, data) in BOX_TREE_FIXTURES {
+            match walk_box_tree(data) {
+                BoxTreeOutcome::Ok(nodes) => {
+                    assert!(!nodes.is_empty(), "{name} has no boxes");
+                    assert_eq!(nodes[0].depth, 1);
+                    assert_eq!(&nodes[0].box_type, b"ftyp", "{name} does not start with ftyp");
+                    let (ftyp, _) =
+                        shiguredo_mp4::boxes::FtypBox::decode(data).expect("ftyp decode");
+                    assert_eq!(ftyp.major_brand.get(), *b"isom");
+                }
+                BoxTreeOutcome::Err(kind) => panic!("{name} walk failed: {kind}"),
+            }
+        }
     }
 
     #[test]

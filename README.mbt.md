@@ -32,13 +32,15 @@ Rust oracle as the default criterion.
 The end-to-end demux API is not implemented yet (M1 in progress). The foundation packages are
 `gpui-mbt/mp4/bytes` (bounds-safe Big Endian cursors, `Mp4Error` classification, `ParseLimits`,
 `FourCC`, `BoxType`/`Uuid`, `Decode`/`Encode`), `gpui-mbt/mp4/bitstream` (MSB-first
-`BitReader`/`BitWriter`) and `gpui-mbt/mp4/box` (box envelope: `BoxHeader`/`BoxSize`,
-`FullBox` headers):
+`BitReader`/`BitWriter`), `gpui-mbt/mp4/box` (box envelope: `BoxHeader`/`BoxSize`,
+`FullBox` headers) and `gpui-mbt/mp4/boxes` (root boxes `ftyp`/`free`/`mdat` and the
+header-level box tree walker):
 
 ```mbt nocheck
 ///|
 import @bytes from "gpui-mbt/mp4/bytes"
 import @box from "gpui-mbt/mp4/box"
+import @boxes from "gpui-mbt/mp4/boxes"
 
 fn main {
   let writer = @bytes.WriteCursor::new()
@@ -50,6 +52,14 @@ fn main {
   let (header, payload) = @box.BoxHeader::decode_header_and_payload(cursor)
   println(header.box_size().get()) // 8
   println(payload.length()) // 0
+
+  let tree = try! @boxes.build_box_tree(
+    @bytes.ReadCursor::new(b"\x00\x00\x00\x0Cmdat\x11\x22\x33\x44"),
+  )
+  for entry in @boxes.flatten_box_tree(tree) {
+    let (depth, node) = entry
+    println(node.dump_line(depth)) // d=1 mdat start=0 size=12 header=8 payload=4
+  }
 }
 ```
 

@@ -69,7 +69,7 @@ Issue 0006 で確定した対応の補足:
 | `BoxType::{Normal([u8; 4]), Uuid([u8; 16])}` | `BoxType::{Normal(FourCC), Uuid(Uuid)}`（`src/bytes`） | 生 4 バイト / 16 バイトを保持。表示のみ差異: 上流は UTF-8 可なら生文字列、不可ならバイト列の Debug（十進）。MoonBit は printable のとき生文字列、非 printable は hex、uuid は 8-4-4-4-12 の hex |
 | `Uuid`（上流は `BoxType::Uuid([u8; 16])`） | `Uuid`（`src/bytes`） | 16 バイト固定の派生型。`from_bytes` は長さ不一致を `InvalidInput`（"uuid box type must be 16 bytes, but got N"） |
 | `BoxSize` | `BoxSize::{U32, U64}`（`src/box`） | `size==1` + `largesize` は `U64`。`U32(0)` は「EOF まで」、`U64(0)` はエンコード用プレースホルダでデコードでは不正 |
-| `BoxHeader::decode_header_and_payload` | `BoxHeader::decode_header_and_payload(ReadCursor)`（`src/box`） | `size==0` は渡されたカーソル末尾までをペイロードにする（トップレベル専用。入れ子の拒否は 0007 の `UnknownBox` 方針） |
+| `BoxHeader::decode_header_and_payload` | `BoxHeader::decode_header_and_payload(ReadCursor)`（`src/box`） | `size==0` は渡されたカーソル末尾までをペイロードにする（トップレベル専用。入れ子の `size==0` 拒否は Issue 0007 の box tree 方針） |
 | `BoxHeader::decode` の再エンコード | `Encode for BoxHeader`（`src/box`） | デコード時の `BoxSize` variant を保持する（wire-preserving）。同一ペイロードで最小幅へ畳むのは `BoxSize::to_canonical` / `BoxHeader::to_canonical` |
 | `BoxHeader::MIN_SIZE` / `MAX_SIZE` | `MIN_BOX_HEADER_SIZE` / `MAX_BOX_HEADER_SIZE`（`src/box`） | associated const を持たないため package 定数（8 / 32） |
 | `BoxHeader::new` / `new_variable_size`（`pub(crate)`） | `BoxHeader::new` / `new_variable_size`（`pub`） | 後続 Issue の構築とテストのために公開する |
@@ -81,11 +81,24 @@ Issue 0006 で確定した対応の補足:
 | `Decode` / `Encode` trait | `Decode` / `Encode`（`src/bytes`） | `decode(ReadCursor) -> Self raise Mp4Error` / `encode(Self, WriteCursor) raise Mp4Error`。失敗時に位置を巻き戻す `decode_from[T]`、バイト列化する `encode_to_bytes[T]` を併設 |
 | `Mp4Error` の box 情報 | `Mp4Error::with_box_type` / `box_type` フィールド（`src/bytes`） | `with_offset` と同様に初回設定のみを残し、`to_string` は `[種別] 分類: 理由 offset=N (at loc)` 形式 |
 
+Issue 0007 で確定した対応の補足:
+
+| 上流 | MoonBit 側 | 備考 |
+| --- | --- | --- |
+| `Brand`（4 バイトのブランド型） | `@bytes.FourCC` | `Brand` 型は作らず 4 バイトコードを直接使う。上流の定数（`ISOM` 等）は必要になった Issue で追加する |
+| `FtypBox` / `FreeBox` / `MdatBox` / `UnknownBox` / `RootBox` | 同名（`src/boxes`）。ただし `RootBox` の variant は `Free` / `Mdat` / `Unknown` の 3 つ | `Moov` / `Moof` / `Mfra` / `Sidx` の variant は Issue 0008 / 0017 で追加する。それまでの間、`moov` 等は `Unknown` として保持され、`RootBox::Unknown` の `is_unknown_box` は `true` になる |
+| `FtypBox::TYPE` などの associated const | 非公開ヘルパー（`ftyp_type()` 等、`src/boxes`） | `FourCC` を const 構築できないため、`normal_box_type("ftyp")` で都度作る。公開 TYPE アクセサは後続 Issue で検討する |
+| `FtypBox`（`major_brand` / `minor_version` / `compatible_brands`） | `FtypBox`（`src/boxes`） | フィールドは同じ。`Encode` は canonical（最小幅、`size==0` を使わない） |
+| `MdatBox::{payload: Vec<u8>}` | `MdatBox::{data_offset, data_size}`（`src/boxes`） | 意図的な差: ペイロードをコピーせず範囲だけ保持する（大容量 fixture でもメモリがファイルサイズに比例しない）。このため `Encode` は実装せず、`RootBox::encode` の `Mdat` は `Unsupported`。書き出しは `BoxHeader` を直接使う |
+| `UnknownBox::decode` / `decode_top_level` / `Encode` | 同名（`src/boxes`） | `decode` は `size==0` を `InvalidData`（上流と同じ理由メッセージ "UnknownBox does not accept size=0"）、`decode_top_level` は末尾までとして受理。`Encode` はデコード時のサイズ形式を保つ（wire-preserving、`size==0` を含む） |
+| （対応型なし） | `BoxNode` / `BoxTreeOptions` / `build_box_tree` / `flatten_box_tree` / `is_plain_container_box_type`（`src/boxes`） | 本リポジトリ独自。位置・サイズと FourCC を保持するヘッダーレベルの box tree 走査。上流は box 構造体に位置を保持しない。入れ子の `size==0` を拒否し、深さ・ノード数上限で `Unsupported`、payload は保持しない |
+| `Mp4File`（`basic_types`） | 未実装 | Issue 0008 以降で `moov` をパースした時点で追加する |
+
 ### `boxes` / `codec_string` / `descriptors`
 
 | 上流 | 概要 | MoonBit 側の対応（予定） |
 | --- | --- | --- |
-| `RootBox::{FtypBox, FreeBox, MdatBox, UnknownBox}` | ルート直下の box | `src/boxes`（Issue 0007） |
+| `RootBox::{FtypBox, FreeBox, MdatBox, UnknownBox}` | ルート直下の box | `src/boxes`（Issue 0007、完了。`moov` / `moof` / `mfra` / `sidx` の variant は 0008 / 0017） |
 | moov tree 群（`MoovBox` 〜 `TrexBox`） | movie/track/media/table box | `src/boxes`（Issue 0008/0009） |
 | sample entry 群（`SampleEntry`, `Avc1Box`, `Hvc1Box`, `Hev1Box`, `Vp08Box`, `Vp09Box`, `Av01Box`, `OpusBox`, `Mp4aBox`, `FlacBox`, `StppBox`, `WvttBox`, `Tx3gBox` ほか） | コーデック別 entry | `src/boxes`（Issue 0010/0028） |
 | fMP4 群（`MoofBox`, `TfhdBox`, `TrunBox`, `SidxBox`, `MfraBox` ほか） | fragment box | `src/boxes`（Issue 0017） |
@@ -150,4 +163,5 @@ Issue 0006 で確定した対応の補足:
 
 ## 7. 更新履歴
 
+- 2026-10-17: Issue 0007（ルート box と box tree 走査）の対応表を追記。`Brand` → `FourCC`、`MdatBox` の範囲保持（意図的な差）、`RootBox` の variant 追加予定、独自の box tree API を記録。
 - 2026-10-16: 初版（Issue 0001）。固定 SHA、ライセンス、API 対応表、規格一覧、更新手順を記録。

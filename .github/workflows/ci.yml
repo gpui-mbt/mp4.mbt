@@ -107,10 +107,20 @@ jobs:
           echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
       - name: Verify fixture hashes and golden determinism
         run: moon run tools/oracle/regenerate_fixtures.mbtx -- --check
-      - name: Verify generated box-header oracle cases
+      - name: Regenerate oracle case tables
         working-directory: tools/oracle
         run: |
-          cargo run --quiet -- box-headers --moonbit > /tmp/box_header_oracle_cases.mbt
-          diff -u ../../src/box/box_header_oracle_cases_test.mbt /tmp/box_header_oracle_cases.mbt
-          printf 'generated box-header case table is in sync (%s cases)\n' \
-            "$(grep -c '    name: ' ../../src/box/box_header_oracle_cases_test.mbt)"
+          cargo run --quiet -- box-headers --moonbit > ../../src/box/box_header_oracle_cases_test.mbt
+          cargo run --quiet -- box-tree-cases --moonbit > ../../src/boxes/box_tree_oracle_cases_test.mbt
+          cargo run --quiet -- box-tree-fixtures --moonbit > ../../src/boxes/box_tree_oracle_fixtures_test.mbt
+      - name: Verify generated oracle tables are current and formatted
+        run: |
+          moon fmt
+          git diff --exit-code -- \
+            src/box/box_header_oracle_cases_test.mbt \
+            src/boxes/box_tree_oracle_cases_test.mbt \
+            src/boxes/box_tree_oracle_fixtures_test.mbt
+          printf 'generated oracle tables are in sync (box-headers: %s cases, box-tree: %s cases, box-tree fixtures: %s)\n' \
+            "$(grep -c '    name: ' src/box/box_header_oracle_cases_test.mbt)" \
+            "$(grep -c '    name: ' src/boxes/box_tree_oracle_cases_test.mbt)" \
+            "$(grep -c '    name: ' src/boxes/box_tree_oracle_fixtures_test.mbt)"

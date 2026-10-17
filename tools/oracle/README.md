@@ -28,6 +28,12 @@ cargo run --quiet -- demux ../../tests/fixtures/upstream/black-h264-video.mp4
 # boundary-case table for BoxHeader (JSON on stdout)
 cargo run --quiet -- box-headers
 
+# header-level box tree of one file (JSON on stdout)
+cargo run --quiet -- box-tree ../../tests/fixtures/upstream/black-h264-video.mp4
+
+# box-tree boundary-case table (JSON on stdout)
+cargo run --quiet -- box-tree-cases
+
 # regenerate all goldens and verify determinism + fixture hashes
 cd ../..
 moon run tools/oracle/regenerate_fixtures.mbtx
@@ -58,6 +64,38 @@ fails on any diff, so changing `BOX_HEADER_CASES` always requires regenerating
 the MoonBit side in the same commit (and the generated code must stay
 `moon fmt` clean).
 
+### Box tree case table and embedded fixtures
+
+`box-tree <file>` walks one file with the header-level policy shared with
+`src/boxes/box_node.mbt`: `size==0` is accepted only at the top level, only
+plain containers (`moov`/`trak`/`mdia`/`minf`/`stbl`/`edts`/`dinf`/`mvex`/
+`moof`/`traf`/`mfra`/`udta`) are descended into, payload bytes are never
+retained (only their range is recorded), and the depth/node limits use the
+defaults (`64` / `65536`). It prints the observed node list
+(`depth` / `type` / `start` / `header_bytes` / `declared_size` / `total_size`),
+the upstream-decoded `ftyp` fields, or the failure kind.
+
+`box-tree-cases` runs the fixed boundary-case table in `src/main.rs`
+(`box_tree_cases`); `box-tree-cases --moonbit` emits it as
+`src/boxes/box_tree_oracle_cases_test.mbt`. `box-tree-fixtures --moonbit` emits
+`src/boxes/box_tree_oracle_fixtures_test.mbt` with the checked-in fixture bytes
+(embedded via `include_bytes!`, so the file changes exactly when a fixture
+changes) and their expected node lists/`ftyp` fields. Both are consumed by
+`src/boxes/box_tree_oracle_test.mbt`:
+
+```bash
+cd tools/oracle
+cargo run --quiet -- box-tree-cases --moonbit > ../../src/boxes/box_tree_oracle_cases_test.mbt
+cargo run --quiet -- box-tree-fixtures --moonbit > ../../src/boxes/box_tree_oracle_fixtures_test.mbt
+cd ../..
+moon fmt   # canonical formatting is part of the generated files
+```
+
+The generated files are committed and must not be edited by hand. CI
+regenerates every generated table in place, runs `moon fmt` and fails on any
+`git diff`, so changing `box_tree_cases` or `BOX_TREE_FIXTURES` always requires
+regenerating the MoonBit side in the same commit.
+
 ## Normalised schema (version 1)
 
 - `input`: `name`, `size` and `sha256` of the fixture (size is a decimal string).
@@ -72,6 +110,11 @@ the MoonBit side in the same commit (and the generated code must stay
 - Stage failures are recorded as `{"status": "error", ...}` with
   `classification` (`decode_error` / `sample_table_error` / `invalid_state` /
   `input_required`) and the upstream `error_kind` where available.
+- `box-tree <file>` prints a separate document with `input`,
+  `box_tree.ftyp` (upstream `FtypBox` fields) and `box_tree.tree`
+  (`{"status": "ok", "nodes": [...]}` or `{"status": "error",
+  "error_kind": "..."}`). Node `start` / `declared_size` / `total_size` are
+  decimal strings; `type_hex` keeps the raw box-type bytes.
 
 Unavailable fixtures or oracle failures are reported as failures by
 `regenerate_fixtures.mbtx`; they are never treated as "no difference".

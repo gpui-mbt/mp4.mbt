@@ -14,7 +14,7 @@ results are reported. The workflow files are `.github/workflows/ci.yml` and
 | `moon-test-js` | js | `moon test --target js` | unit tests (same values/errors as native) |
 | `moon-fmt` | — | `moon fmt --check` | formatting diff |
 | `moon-info` | — | `moon info` + `git diff --exit-code -- '*.mbti'` | public API (`surface`) drift |
-| `oracle` | Rust + MoonBit | `cargo test` (tools/oracle), `moon run tools/oracle/regenerate_fixtures.mbtx -- --check`, and the `box-headers --moonbit` diff | pinned oracle tests, fixture hashes, golden determinism, generated box-header case table |
+| `oracle` | Rust + MoonBit | `cargo test` (tools/oracle), `moon run tools/oracle/regenerate_fixtures.mbtx -- --check`, and the generated oracle-table diff | pinned oracle tests, fixture hashes, golden determinism, generated oracle case tables (`box-headers` / `box-tree`) |
 
 - Required checks for merge (branch protection): the 5 MoonBit jobs plus
   `oracle`. Configure them in the repository settings; this list is the
@@ -52,10 +52,20 @@ moon info && git diff --exit-code -- '*.mbti'
 cd tools/oracle && cargo test && cd ../..
 moon run tools/oracle/regenerate_fixtures.mbtx -- --check
 cd tools/oracle
-cargo run --quiet -- box-headers --moonbit > /tmp/box_header_oracle_cases.mbt
-diff -u ../../src/box/box_header_oracle_cases_test.mbt /tmp/box_header_oracle_cases.mbt
+cargo run --quiet -- box-headers --moonbit > ../../src/box/box_header_oracle_cases_test.mbt
+cargo run --quiet -- box-tree-cases --moonbit > ../../src/boxes/box_tree_oracle_cases_test.mbt
+cargo run --quiet -- box-tree-fixtures --moonbit > ../../src/boxes/box_tree_oracle_fixtures_test.mbt
 cd ../..
+moon fmt
+git diff --exit-code -- \
+  src/box/box_header_oracle_cases_test.mbt \
+  src/boxes/box_tree_oracle_cases_test.mbt \
+  src/boxes/box_tree_oracle_fixtures_test.mbt
 ```
+
+The generated tables are formatted with `moon fmt` (their canonical formatting
+is part of the committed file); the CI step regenerates them in place, formats
+and then requires an empty `git diff`, so an out-of-date table fails loudly.
 
 ## Failure injection (CI contract verification)
 
@@ -69,8 +79,11 @@ runners are not available:
    and the `moon-info` job fails.
 5. Fail any MoonBit test → the Pages deploy job is not started because it
    requires `workflow_run.conclusion == success` on `main`.
-6. Edit `src/box/box_header_oracle_cases_test.mbt` (or the Rust case table in
-   `tools/oracle/src/main.rs`) → the `oracle` job's generated-table diff fails.
+6. Edit `src/box/box_header_oracle_cases_test.mbt`,
+   `src/boxes/box_tree_oracle_cases_test.mbt`,
+   `src/boxes/box_tree_oracle_fixtures_test.mbt` (or the Rust case
+   tables/fixture list in `tools/oracle/src/main.rs`) → the `oracle` job's
+   generated-table diff fails.
 
 ## Pages deployment
 

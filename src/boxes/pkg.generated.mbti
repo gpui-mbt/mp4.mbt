@@ -1,0 +1,136 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "gpui-mbt/mp4/boxes"
+
+import {
+  "gpui-mbt/mp4/box",
+  "gpui-mbt/mp4/bytes",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub const DEFAULT_MAX_BOX_TREE_NODES : Int = 65536
+
+pub fn build_box_tree(@bytes.ReadCursor, options? : BoxTreeOptions) -> Array[BoxNode] raise @bytes.Mp4Error
+
+pub fn flatten_box_tree(Array[BoxNode]) -> Array[(Int, BoxNode)]
+
+pub fn is_plain_container_box_type(@bytes.BoxType) -> Bool
+
+// Errors
+
+// Types and methods
+pub struct BoxNode {
+  box_type : @bytes.BoxType
+  start : UInt64
+  header_bytes : Int
+  declared_size : UInt64
+  total_size : UInt64
+  children : Array[BoxNode]
+} derive(@debug.Debug)
+pub fn BoxNode::box_type(Self) -> @bytes.BoxType
+pub fn BoxNode::children(Self) -> Array[Self]
+pub fn BoxNode::declared_size(Self) -> UInt64
+pub fn BoxNode::dump_line(Self, Int) -> String
+pub fn BoxNode::end(Self) -> UInt64
+pub fn BoxNode::header_bytes(Self) -> Int
+pub fn BoxNode::is_variable_size(Self) -> Bool
+pub fn BoxNode::payload_size(Self) -> UInt64
+pub fn BoxNode::payload_start(Self) -> UInt64
+pub fn BoxNode::start(Self) -> UInt64
+pub fn BoxNode::to_repr(Self) -> @debug.Repr
+pub fn BoxNode::total_size(Self) -> UInt64
+
+pub struct BoxTreeOptions {
+  max_depth : Int
+  max_nodes : Int
+  is_container : (@bytes.BoxType) -> Bool
+}
+pub fn BoxTreeOptions::new() -> Self
+pub fn BoxTreeOptions::with_container_predicate(Self, (@bytes.BoxType) -> Bool) -> Self
+pub fn BoxTreeOptions::with_max_depth(Self, Int) -> Self
+pub fn BoxTreeOptions::with_max_nodes(Self, Int) -> Self
+
+pub struct FreeBox {
+  payload : Bytes
+} derive(Eq, @debug.Debug)
+pub fn FreeBox::box_type(Self) -> @bytes.BoxType
+pub fn FreeBox::children(Self) -> Array[&@box.BaseBox]
+pub fn FreeBox::decode(@bytes.ReadCursor) -> Self raise @bytes.Mp4Error
+pub fn FreeBox::encode(Self, @bytes.WriteCursor) -> Unit raise @bytes.Mp4Error
+pub fn FreeBox::equal(Self, Self) -> Bool
+pub fn FreeBox::is_unknown_box(Self) -> Bool
+pub fn FreeBox::new(Bytes) -> Self
+pub fn FreeBox::not_equal(Self, Self) -> Bool
+pub fn FreeBox::to_repr(Self) -> @debug.Repr
+pub impl @box.BaseBox for FreeBox
+pub impl @bytes.Decode for FreeBox
+pub impl @bytes.Encode for FreeBox
+
+pub struct FtypBox {
+  major_brand : @bytes.FourCC
+  minor_version : UInt
+  compatible_brands : Array[@bytes.FourCC]
+} derive(@debug.Debug)
+pub fn FtypBox::box_type(Self) -> @bytes.BoxType
+pub fn FtypBox::children(Self) -> Array[&@box.BaseBox]
+pub fn FtypBox::decode(@bytes.ReadCursor) -> Self raise @bytes.Mp4Error
+pub fn FtypBox::encode(Self, @bytes.WriteCursor) -> Unit raise @bytes.Mp4Error
+pub fn FtypBox::is_unknown_box(Self) -> Bool
+pub fn FtypBox::new(@bytes.FourCC, UInt, Array[@bytes.FourCC]) -> Self
+pub fn FtypBox::to_repr(Self) -> @debug.Repr
+pub impl @box.BaseBox for FtypBox
+pub impl @bytes.Decode for FtypBox
+pub impl @bytes.Encode for FtypBox
+
+pub struct MdatBox {
+  data_offset : UInt64
+  data_size : UInt64
+} derive(Eq, @debug.Debug)
+pub fn MdatBox::box_type(Self) -> @bytes.BoxType
+pub fn MdatBox::children(Self) -> Array[&@box.BaseBox]
+pub fn MdatBox::decode(@bytes.ReadCursor) -> Self raise @bytes.Mp4Error
+pub fn MdatBox::equal(Self, Self) -> Bool
+pub fn MdatBox::is_unknown_box(Self) -> Bool
+pub fn MdatBox::new(UInt64, UInt64) -> Self
+pub fn MdatBox::not_equal(Self, Self) -> Bool
+pub fn MdatBox::to_repr(Self) -> @debug.Repr
+pub impl @box.BaseBox for MdatBox
+pub impl @bytes.Decode for MdatBox
+
+pub(all) enum RootBox {
+  Free(FreeBox)
+  Mdat(MdatBox)
+  Unknown(UnknownBox)
+} derive(@debug.Debug)
+pub fn RootBox::box_type(Self) -> @bytes.BoxType
+pub fn RootBox::children(Self) -> Array[&@box.BaseBox]
+pub fn RootBox::decode(@bytes.ReadCursor) -> Self raise @bytes.Mp4Error
+pub fn RootBox::encode(Self, @bytes.WriteCursor) -> Unit raise @bytes.Mp4Error
+pub fn RootBox::is_unknown_box(Self) -> Bool
+pub fn RootBox::to_repr(Self) -> @debug.Repr
+pub impl @box.BaseBox for RootBox
+pub impl @bytes.Decode for RootBox
+pub impl @bytes.Encode for RootBox
+
+pub struct UnknownBox {
+  box_type : @bytes.BoxType
+  box_size : @box.BoxSize
+  payload : Bytes
+} derive(Eq, @debug.Debug)
+pub fn UnknownBox::box_type(Self) -> @bytes.BoxType
+pub fn UnknownBox::children(Self) -> Array[&@box.BaseBox]
+pub fn UnknownBox::decode(@bytes.ReadCursor) -> Self raise @bytes.Mp4Error
+pub fn UnknownBox::decode_top_level(@bytes.ReadCursor) -> Self raise @bytes.Mp4Error
+pub fn UnknownBox::encode(Self, @bytes.WriteCursor) -> Unit raise @bytes.Mp4Error
+pub fn UnknownBox::equal(Self, Self) -> Bool
+pub fn UnknownBox::is_unknown_box(Self) -> Bool
+pub fn UnknownBox::new(@bytes.BoxType, @box.BoxSize, Bytes) -> Self
+pub fn UnknownBox::not_equal(Self, Self) -> Bool
+pub fn UnknownBox::to_repr(Self) -> @debug.Repr
+pub impl @box.BaseBox for UnknownBox
+pub impl @bytes.Decode for UnknownBox
+pub impl @bytes.Encode for UnknownBox
+
+// Type aliases
+
+// Traits

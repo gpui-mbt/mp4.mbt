@@ -8,6 +8,19 @@ versions (`M0`–`M5`); unreleased work is listed under `Unreleased`.
 
 ### Added
 
+- Root boxes and header-level box tree (issue 0007): `src/boxes` gains
+  `FtypBox` (major/minor brand and compatible brands), `FreeBox`, `MdatBox`
+  (payload range `data_offset`/`data_size`, no copy), `UnknownBox` (`decode`
+  rejects `size==0`, `decode_top_level` accepts it and `Encode` preserves the
+  wire form) and `RootBox` (`Free`/`Mdat`/`Unknown`). The `BoxNode` walker
+  records depth/type/position/sizes without retaining payloads, rejects nested
+  `size==0`, enforces depth/node limits (`BoxTreeOptions`, `flatten_box_tree`,
+  `dump_line`). `src/bytes` gains `with_box_type` and
+  `ReadCursor::from_view`. The Rust oracle gains `box-tree`,
+  `box-tree-cases` and `box-tree-fixtures` modes; the generated case table and
+  two embedded-fixture trees are consumed by
+  `src/boxes/box_tree_oracle_test.mbt` and diffed in CI.
+
 - Box envelope foundations (issue 0006): `src/box` gains `BoxSize`
   (`U32`/`U64`, variable-size markers, overflow-checked `with_payload_size`),
   `BoxHeader` (decode/encode, top-level `size==0` payload extraction,

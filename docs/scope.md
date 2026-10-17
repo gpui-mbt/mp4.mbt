@@ -52,7 +52,7 @@
 | fMP4 file demux | `Fmp4FileDemuxer` | Not started | Unit / oracle |
 | 通常 MP4 file mux | `Mp4FileMuxer` | Not started | Unit / interop |
 | fMP4 segment mux | `Fmp4SegmentMuxer` | Not started | Unit / interop |
-| Box tree / box 単体 | `boxes` | Partial（box envelope は 0006 で実装） | Unit / wire 往復 |
+| Box tree / box 単体 | `boxes` | Partial（box envelope 0006、ルート box と tree 走査 0007） | Unit / wire 往復 / oracle |
 | RFC 6381 codecs 文字列 | `codec_string` | Not started | Unit / oracle |
 | AVC/HEVC bitstream 補助 | `bitstream::{h264, h265}` | Not started | Unit / fixture |
 | AAC/Opus bitstream 補助 | `bitstream::{aac, opus}` | Not started | Unit / fixture |
@@ -113,6 +113,7 @@ bytes <- box <- boxes <- demux <- mux
 5. 初期の muxer は同一 `TrackKind` 1 トラックまで（映像／音声／字幕各 1）。多言語音声・複数字幕の mux は暗黙に支援しない。
 6. JSON 比較では 64bit 整数を十進**文字列**で保持し、JS の安全整数精度外を Number へ強制変換しない。
 7. 不正入力による panic・制限なし allocation・無限 loop を許さない。parse 用 limits とエラーの位置/原因を持ち、正常入力と不完全入力を区別する。
+8. box tree（`src/boxes` の `BoxNode`）の `start` / `payload_start` は入力バッファ先頭を 0 とする絶対位置（`ReadCursor` の base_offset を含む）。`mdat` はペイロードを保持せず `data_offset` / `data_size` の範囲だけで表す。入れ子の `size==0` は拒否し、深さ・ノード数は limits で制限する。
 
 ## 7. 検証状態の記録
 
