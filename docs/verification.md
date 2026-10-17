@@ -14,6 +14,7 @@ Google Chrome 155.0.8059.84 for browser E2E.
 | Format | `moon fmt --check` | clean |
 | Public API | `moon info` | no diff |
 | Native inspector module | `moon -C native/inspector check` | clean |
+| Native inspector window smoke | `sh native/inspector/run.sh <fixture> --smoke --status /tmp/status.txt` | PASS, 27 rows |
 | Oracle unit tests | `cd tools/oracle && cargo test` | 23 passed |
 | Oracle goldens | `moon run tools/oracle/regenerate_fixtures.mbtx -- --check` | 9/9 unchanged |
 | Diff lab (Node) | `node web/run_lab.mjs` | 9 fixtures PASS |
@@ -37,7 +38,7 @@ Notes:
 
 | Check | Reason |
 | --- | --- |
-| Native inspector window smoke | Direct run, `launchctl asuser`, and a `.app` bundle via LaunchServices all abort at `@macos.Host::start()` (SIGABRT / `window_unavailable`); this shell has no usable GUI WindowServer session. |
+
 | Native inspector file picker / scroll / hex interaction | Not implemented yet; the host renders the portable rows. |
 | Large-file (500 MB+) no-full-read measurement | Not measured. |
 | CI-run browser E2E | Playwright browsers are not downloaded in CI; the E2E is a local/manual check. |

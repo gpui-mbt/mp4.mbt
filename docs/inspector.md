@@ -27,6 +27,6 @@ moon -C native/inspector run src/main --target native -- <file.mp4> --smoke
 ## Status
 
 - Portable model: implemented and tested.
-- gpui native host: implemented; `moon check` PASS. Window smoke is **NOT_RUN**
-  in this headless session (macOS host start fails without a GUI session).
+- gpui native host: implemented; `moon check` and window smoke PASS via
+  `sh native/inspector/run.sh <fixture> --smoke` (27 rows).
 - File picker, interaction, large-file range read / virtual list: **NOT_RUN**.

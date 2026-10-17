@@ -43,6 +43,7 @@ fn text_item(
 fn inspector_scene(
   width : Double,
   height : Double,
+  scale : Double,
   lines : Array[String],
 ) -> @scene.SceneSnapshot {
   let items : Array[@scene.SceneItem] = [
@@ -69,7 +70,7 @@ fn inspector_scene(
   }
   match @scene.SceneSnapshot::new(
     inspector_rect(0.0, 0.0, width, height),
-    1.0,
+    scale,
     [],
     [],
     items,
@@ -161,8 +162,11 @@ async fn run(smoke : Bool, path : String, status_path : String?) -> Unit {
   let lines = build_lines(path)
   let host = match @macos.Host::start() {
     Ok(host) => host
-    Err(_) => {
-      write_status(status_path, "error: macOS host start failed")
+    Err(e) => {
+      write_status(
+        status_path,
+        "error: macOS host start failed " + e.operation() + ":" + e.code().label(),
+      )
       return
     }
   }
@@ -172,16 +176,32 @@ async fn run(smoke : Bool, path : String, status_path : String?) -> Unit {
     700.0,
   ) {
     Ok(window) => window
-    Err(_) => {
-      write_status(status_path, "error: window creation failed")
+    Err(e) => {
+      write_status(
+        status_path,
+        "error: window creation failed " + e.operation() + ":" + e.code().label(),
+      )
       return
     }
   }
-  let snapshot = inspector_scene(1000.0, 700.0, lines)
+  let (window_width, window_height, _scale) = match host.window_metrics(window) {
+    Ok(metrics) => metrics
+    Err(e) => {
+      write_status(
+        status_path,
+        "error: window_metrics failed " + e.operation() + ":" + e.code().label(),
+      )
+      return
+    }
+  }
+  let snapshot = inspector_scene(window_width, window_height, _scale, lines)
   match host.present(window, snapshot) {
     Ok(_) => ()
-    Err(_) => {
-      write_status(status_path, "error: present failed")
+    Err(e) => {
+      write_status(
+        status_path,
+        "error: present failed " + e.operation() + ":" + e.code().label(),
+      )
       return
     }
   }
