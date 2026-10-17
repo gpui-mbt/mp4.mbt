@@ -8,6 +8,13 @@ versions (`M0`–`M5`); unreleased work is listed under `Unreleased`.
 
 ### Added
 
+- WebCodecs transcode demo (issue 0029): `web/transcode.html` +
+  `web/transcode.js` decode a local MP4 with `VideoDecoder`, encode H.264 with
+  `VideoEncoder`, and mux the chunks with the new `src/webtranscode`
+  foreign-library session (`Mp4FileMuxer`). `webdump` gains
+  `mp4dump_codec_config_json` for decoder descriptions. Node bundle smoke is
+  verified; browser E2E is NOT_RUN.
+
 - Fuzz / hardening (issue 0031): deterministic xorshift mutation, truncation
   corpus, `src/fuzz` tests and a native `examples/fuzz` runner; limits and
   seed/reproduction rules documented in `docs/fuzz.md`.

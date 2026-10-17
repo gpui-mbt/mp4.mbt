@@ -1,9 +1,9 @@
 # [P2 / M5] WebCodecsでローカルMP4変換デモを作る
 
-Status: polished
+Status: done
 Model: DeepSeek V4.1 Flash Free
 Created: 2026-10-16
-Updated: 2026-10-16
+Updated: 2026-10-17
 Branch: feat/0029-webcodecs-transcode
 Priority: P2
 Milestone: M5
@@ -102,3 +102,9 @@ Upstream baseline: [shiguredo/mp4-rs@1282b704f44184ec792e1549b5d31e0c4c54dc59](h
 - 実装時の未決事項: デモの配置パス、初期対象ブラウザ、サイズ上限値、音声 track を含む変換の将来手順は実装時に確定し、本 issue と README に反映する。
 - 運用・証跡: 実測表は実行できた環境と未実行を区別して記録する。入力ファイルはローカル処理のみとし、外部送信しない。
 - 2026-10-16: 本文を実装可能な形式へ整備し、実装に着手可能なため polished へ更新。
+
+## 検証
+
+- `src/webtranscode`（MoonBit `Mp4FileMuxer` セッション）と `web/transcode.html` / `transcode.js` を追加した。
+- `sh web/build.sh` で `web/dist/transcode-core.js` を生成し、Node で `webtranscode_create` / `webtranscode_finalize` の bundle smoke を実行（PASS）。
+- 実ブラウザでの WebCodecs E2E・出力 MP4 の Rust demux 比較は **NOT_RUN**。README には未検証と明記した。

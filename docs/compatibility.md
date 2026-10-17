@@ -23,7 +23,7 @@
 | AV1/VP8/VP9 bitstream | Implemented | Unit PASS、Rust oracle UNVERIFIED | 0026 |
 | Hybrid MP4 positions | Implemented | Unit PASS、実ファイル E2E は未実行 | 0027 |
 | 字幕 sample entry | Implemented | Unit / roundtrip PASS | 0028 |
-| WebCodecs transcode | Not started / Partial | NOT_RUN | 0029 |
+| WebCodecs transcode | Implemented | Node bundle smoke PASS、browser E2E NOT_RUN | 0029 |
 | Native gpui Inspector | Not started / Partial | NOT_RUN | 0030 |
 | fuzz / PBT | Partial | fast mutation suite PASS、長時間 fuzz NOT_RUN | 0031 |
 | 性能 baseline | Partial | read/I/O 回数の smoke のみ、時間・RSS NOT_RUN | 0032 |

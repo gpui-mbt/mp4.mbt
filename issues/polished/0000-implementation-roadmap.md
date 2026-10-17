@@ -206,7 +206,7 @@ M1 では**動画そのものの再生や変換**を UI に表示できなくて
 
 #### M5 – Extended demos / quality / release
 
-- [ ] [0029 WebCodecsでローカルMP4変換デモを作る](./0029-webcodecs-transcode.md) — P2 / deps: 0015, 0022, 0024
+- [x] [0029 WebCodecsでローカルMP4変換デモを作る](../done/0029-webcodecs-transcode.md) — P2 / deps: 0015, 0022, 0024 / 検証: Node bundle smoke PASS, browser E2E NOT_RUN
 - [ ] [0030 gpui.mbt Native MP4 Inspectorを作る](./0030-native-gpui-inspector.md) — P2 / deps: 0013, 0015
 - [x] [0031 変異テスト・fuzz・大規模不正入力の堅牢化](../done/0031-fuzz-pbt-hardening.md) — P1 / deps: 0004, 0005, 0006, 0013, 0018, 0022 / 検証: fast suite PASS, long fuzz NOT_RUN
 - [x] [0032 Range I/O・メモリ・CPUのプロファイルを確立する](../done/0032-performance-profile.md) — P2 / deps: 0014, 0015, 0019, 0022 / 検証: harness PASS, baseline NOT_RUN

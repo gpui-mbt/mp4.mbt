@@ -1,0 +1,35 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "gpui-mbt/mp4/webtranscode"
+
+// Values
+pub fn webtranscode_add_sample(WebTranscodeSession, Bytes, UInt, Bool, Int64?) -> Unit
+
+pub fn webtranscode_create(UInt, UInt, UInt) -> WebTranscodeSession
+
+pub fn webtranscode_error_json(WebTranscodeSession) -> String
+
+pub fn webtranscode_finalize(WebTranscodeSession) -> String
+
+pub fn webtranscode_set_av1(WebTranscodeSession, Bytes) -> Unit
+
+pub fn webtranscode_set_avc(WebTranscodeSession, Bytes) -> Unit
+
+pub fn webtranscode_state(WebTranscodeSession) -> String
+
+// Errors
+
+// Types and methods
+pub struct WebTranscodeSession {
+  // private fields
+}
+pub fn WebTranscodeSession::add_sample(Self, Bytes, UInt, Bool, Int64?) -> Unit
+pub fn WebTranscodeSession::error_json(Self) -> String
+pub fn WebTranscodeSession::finalize(Self) -> String
+pub fn WebTranscodeSession::new(UInt, UInt, UInt) -> Self
+pub fn WebTranscodeSession::set_av1(Self, Bytes) -> Unit
+pub fn WebTranscodeSession::set_avc(Self, Bytes) -> Unit
+pub fn WebTranscodeSession::state(Self) -> String
+
+// Type aliases
+
+// Traits

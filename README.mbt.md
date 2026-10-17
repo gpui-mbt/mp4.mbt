@@ -107,6 +107,24 @@ and asserts the read log never spans `mdat` payload:
 PLAYWRIGHT_PATH=<path-to-playwright> node web/e2e/e2e.mjs
 ```
 
+### WebCodecs transcode (JS)
+
+`web/transcode.html` is a browser-local MP4 → MP4 transcode demo. It demuxes
+the input with the existing MoonBit dump session, decodes with `VideoDecoder`,
+encodes H.264 with `VideoEncoder`, and muxes the result with the MoonBit
+`webtranscode` foreign library (`Mp4FileMuxer`). Codec support is checked with
+`isConfigSupported`; unsupported browsers show the codec as Disabled. Files are
+never uploaded. The output is re-readable by `Mp4FileDemuxer`.
+
+```bash
+sh web/build.sh
+# serve web/dist and open /transcode.html
+```
+
+Browser E2E (WebCodecs + Playwright) is **NOT_RUN** in this environment;
+only the Node bundle smoke (`web/build.sh` + `webtranscode_create/finalize`) is
+verified.
+
 ### Diff Lab — Rust/WASM vs MoonBit/JS
 
 `web/lab.html` is a conformance lab: the same MP4 bytes are parsed by the

@@ -685,6 +685,86 @@ pub fn WebDumpSession::tracks_json(self : WebDumpSession) -> Json {
 }
 
 ///|
+/// エンコードに失敗した場合は `None` を返す。
+fn webdump_encode_bytes(f : () -> Bytes raise @bytes.Mp4Error) -> Bytes? {
+  try f() catch {
+    _ => None
+  } noraise {
+    value => Some(value)
+  }
+}
+
+///|
+/// 各トラックの codec 設定 bytes を base64 で返す。
+///
+/// WebCodecs の `VideoDecoderConfig.description` 用。`avc1` は `avcC`、
+/// `hev1`/`hvc1` は `hvcC`、`av01` は `av1C` のペイロード（ボックスヘッダーを除く）
+/// を返す。設定が取れないトラックは `description_b64` が `null` になる。
+pub fn WebDumpSession::codec_config_json(self : WebDumpSession) -> Json {
+  let items : Array[Json] = []
+  for track in self.track_infos {
+    let mut entry : @boxes.SampleEntry? = None
+    let mut found = false
+    for sample in self.samples {
+      if !found && sample.track.track_id == track.track_id {
+        match sample.sample_entry {
+          Some(value) => {
+            entry = Some(value)
+            found = true
+          }
+          None => ()
+        }
+      }
+    }
+    let mut entry_type : Json = Json::null()
+    let mut description : Json = Json::null()
+    match entry {
+      Some(value) => {
+        entry_type = Json(value.box_type().to_string())
+        let raw : Bytes? = match value {
+          @boxes.SampleEntry::Avc1(b) =>
+            webdump_encode_bytes(fn() raise @bytes.Mp4Error {
+              @bytes.encode_to_bytes(b.avcc_box)
+            })
+          @boxes.SampleEntry::Hev1(b) =>
+            webdump_encode_bytes(fn() raise @bytes.Mp4Error {
+              @bytes.encode_to_bytes(b.hvcc_box)
+            })
+          @boxes.SampleEntry::Hvc1(b) =>
+            webdump_encode_bytes(fn() raise @bytes.Mp4Error {
+              @bytes.encode_to_bytes(b.hvcc_box)
+            })
+          @boxes.SampleEntry::Av01(b) => Some(b.av1c_box.config_obus)
+          @boxes.SampleEntry::Vp09(b) =>
+            webdump_encode_bytes(fn() raise @bytes.Mp4Error {
+              @bytes.encode_to_bytes(b.vpcc_box)
+            })
+          _ => None
+        }
+        description = match raw {
+          Some(bytes) => {
+            let payload = if bytes.length() > 8 {
+              bytes[8:].to_owned()
+            } else {
+              bytes
+            }
+            Json(@base64.encode(payload[:]))
+          }
+          None => Json::null()
+        }
+      }
+      None => ()
+    }
+    items.push({
+      "track_id": track.track_id,
+      "sample_entry": entry_type,
+      "description_b64": description,
+    })
+  }
+  Json(items)
+}
+
+///|
 /// サンプル一覧の窓 JSON。`offset` から最大 `count` 件 (上限 10000)。
 pub fn WebDumpSession::samples_json(
   self : WebDumpSession,
@@ -811,6 +891,12 @@ pub fn mp4dump_samples_json(
 
 ///|
 /// トラック一覧を返す。
+#export_name("mp4dump_codec_config_json")
+pub fn mp4dump_codec_config_json(session : WebDumpSession) -> String {
+  @demux_report.report_json_string(session.codec_config_json())
+}
+
+///|
 #export_name("mp4dump_tracks_json")
 pub fn mp4dump_tracks_json(session : WebDumpSession) -> String {
   session.tracks_json().stringify()

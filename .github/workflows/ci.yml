@@ -190,6 +190,11 @@ jobs:
             mp4.mp4dump_cancel(s);
             if (mp4.mp4dump_state(s) !== "cancelled") throw new Error("cancel failed");
             if (mp4.mp4dump_next_request(s) !== "") throw new Error("request after cancel");
+            import * as tx from "./web/dist/transcode-core.js";
+            const s = tx.webtranscode_create(640, 480, 1000000);
+            if (tx.webtranscode_state(s) !== "ready") throw new Error("transcode state");
+            tx.webtranscode_finalize(s);
+            if (!tx.webtranscode_error_json(s).includes("sample entry")) throw new Error("transcode error");
             console.log("web bundle smoke: ok");
           '
 

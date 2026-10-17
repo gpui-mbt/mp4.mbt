@@ -10,6 +10,8 @@ pub fn mp4dump_box_tree_json(WebDumpSession) -> String
 
 pub fn mp4dump_cancel(WebDumpSession) -> Unit
 
+pub fn mp4dump_codec_config_json(WebDumpSession) -> String
+
 pub fn mp4dump_create(String, UInt64, UInt64) -> WebDumpSession
 
 pub fn mp4dump_error_json(WebDumpSession) -> String
@@ -43,6 +45,7 @@ pub struct WebDumpSession {
 }
 pub fn WebDumpSession::box_tree_json(Self) -> Json
 pub fn WebDumpSession::cancel(Self) -> Unit
+pub fn WebDumpSession::codec_config_json(Self) -> Json
 pub fn WebDumpSession::error_json(Self) -> String
 pub fn WebDumpSession::new(String, UInt64, UInt64) -> Self
 pub fn WebDumpSession::next_request(Self) -> @demux.RequiredInput?

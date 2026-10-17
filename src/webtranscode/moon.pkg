@@ -1,0 +1,9 @@
+import {
+  "gpui-mbt/mp4/bytes",
+  "gpui-mbt/mp4/boxes",
+  "gpui-mbt/mp4/bitstream",
+  "gpui-mbt/mp4/mux" @mp4_mux,
+  "moonbitlang/core/encoding/base64",
+}
+
+pkgtype(kind: "foreign_library")

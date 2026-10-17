@@ -10,8 +10,10 @@ set -eu
 cd "$(dirname "$0")/.."
 moon build --release --target js src/webdump
 mkdir -p web/dist
-cp web/index.html web/app.js web/lab.html web/lab.js web/style.css web/dist/
+cp web/index.html web/app.js web/lab.html web/lab.js web/transcode.html web/transcode.js web/style.css web/dist/
 cp _build/js/release/build/webdump/webdump.js web/dist/mp4.js
+moon build --release --target js src/webtranscode
+cp _build/js/release/build/webtranscode/webtranscode.js web/dist/transcode-core.js
 
 if command -v cargo >/dev/null 2>&1; then
   # rust-toolchain.toml は作業ディレクトリ起点で解決されるため cd が必要
