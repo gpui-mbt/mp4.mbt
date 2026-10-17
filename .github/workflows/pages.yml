@@ -1,8 +1,8 @@
 name: Pages
 
 # Deploys only artifacts that come out of a successful CI run on main.
-# The web demo itself is implemented in issue 0015; until then this workflow
-# skips the build with an explicit message instead of publishing anything.
+# Builds the MoonBit JS-target bundle plus the static web/ assets into
+# web/dist/ and deploys it to GitHub Pages.
 
 on:
   workflow_run:
@@ -40,29 +40,16 @@ jobs:
         run: |
           curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
           echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
-      - name: Build web demo (skip when not implemented yet)
-        id: build
-        run: |
-          if [ ! -f src/web/moon.pkg ]; then
-            echo "web demo is not implemented yet (issue 0015); nothing to deploy"
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          moon build --target js --release src/web
-          if [ ! -d web/dist ]; then
-            echo "::error::src/web exists but web/dist was not produced"
-            exit 1
-          fi
-          echo "skip=false" >> "$GITHUB_OUTPUT"
+      - name: Install dependencies
+        run: moon install
+      - name: Build web demo (JS-target MoonBit core + static assets)
+        run: sh web/build.sh
       - name: Configure Pages
-        if: steps.build.outputs.skip != 'true'
         uses: actions/configure-pages@v5
       - name: Upload artifact (limited to web/dist)
-        if: steps.build.outputs.skip != 'true'
         uses: actions/upload-pages-artifact@v3
         with:
           path: web/dist
       - name: Deploy to GitHub Pages
-        if: steps.build.outputs.skip != 'true'
         id: deployment
         uses: actions/deploy-pages@v4

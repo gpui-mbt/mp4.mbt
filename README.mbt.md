@@ -76,6 +76,37 @@ Samples:
     Data size: 796 bytes
 ```
 
+### Browser MP4 Dump (JS)
+
+A static browser demo lives in `web/` and is deployed to GitHub Pages. Drop an
+MP4 file onto the page to see its box tree, tracks, samples and a canonical
+JSON report — the same schema the native CLI emits. Parsing runs entirely in
+the browser via `File.slice` range reads driven by the Sans I/O demuxer; the
+file is never uploaded and `mdat` payload bytes are never read.
+
+```bash
+sh web/build.sh   # builds the JS-target MoonBit bundle into web/dist/
+```
+
+The page is plain HTML/CSS/JS — `web/dist` is self-contained and can be served
+by any static file server (e.g. `python3 -m http.server -d web/dist`).
+
+`src/webdump` is the adapter package: a `foreign_library` MoonBit package that
+exports a small session API (`mp4dump_create` / `mp4dump_next_request` /
+`mp4dump_feed` / `mp4dump_state` / `mp4dump_cancel` / `mp4dump_*_json`) as an
+ESM bundle. All DOM and `File` API handling stays in `web/app.js`; the session
+machine itself is pure MoonBit and shares `src/demux_report` canonical JSON
+with the CLI.
+
+A Playwright E2E (`web/e2e/e2e.mjs`, local verification tool — browsers are
+not downloaded in CI) drives headless Chromium through file selection, box
+tree / track / sample rendering, re-selection, cancellation and error paths,
+and asserts the read log never spans `mdat` payload:
+
+```bash
+PLAYWRIGHT_PATH=<path-to-playwright> node web/e2e/e2e.mjs
+```
+
 ### Library
 
 The Sans I/O demuxer for normal MP4 files lives in `gpui-mbt/mp4/demux`

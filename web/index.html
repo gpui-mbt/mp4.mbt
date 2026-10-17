@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mp4.mbt — MP4 Dump</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>MP4 Dump</h1>
+  <p>
+    <a href="https://github.com/gpui-mbt/mp4.mbt">gpui-mbt/mp4.mbt</a> の
+    MoonBit (JS ターゲット) ビルドによるブラウザデモです。
+    ドロップした MP4 をブラウザ内で構造解析し、Box Tree・トラック・
+    サンプル一覧を表示します。
+  </p>
+  <ul class="notes">
+    <li>解析はすべてブラウザ内で完結します。ファイルは外部へ送信されません。</li>
+    <li>ファイルの読み込みは <code>File.slice</code> による範囲読み込みで、
+      全体を一括でメモリに展開しません (<code>mdat</code> のペイロードは読みません)。</li>
+    <li>このデモはプレイヤーではありません。構造として読み取れることと、
+      そのコーデックをブラウザで再生できることは別です。</li>
+  </ul>
+</header>
+
+<main>
+  <section id="dropzone" class="dropzone" tabindex="0">
+    <p>MP4 ファイルをドラッグ&amp;ドロップ、またはクリックして選択</p>
+    <input id="file-input" type="file" accept="video/mp4,.mp4,.m4s,.m4v" hidden>
+    <div class="dropzone-controls">
+      <button id="pick-button" type="button">ファイルを選択</button>
+      <button id="cancel-button" type="button" disabled>キャンセル</button>
+    </div>
+    <div id="progress" class="progress" aria-live="polite"></div>
+  </section>
+
+  <section id="error-section" hidden>
+    <h2>エラー</h2>
+    <div id="error-body" class="error"></div>
+  </section>
+
+  <section id="file-section" hidden>
+    <h2>ファイル情報</h2>
+    <dl id="file-info" class="kv"></dl>
+  </section>
+
+  <section id="tracks-section" hidden>
+    <h2>トラック一覧</h2>
+    <table id="tracks-table">
+      <thead>
+        <tr>
+          <th>#</th><th>Track ID</th><th>種別</th><th>Codec</th>
+          <th>Duration</th><th>Timescale</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    <p class="note">
+      codec 列は最初に現れたサンプルエントリ由来の推定です。
+      <code>unsupported</code> は「構造は読み取れるが codec 文字列化は未対応」を意味します。
+    </p>
+  </section>
+
+  <section id="tree-section" hidden>
+    <h2>Box Tree</h2>
+    <p class="note">トップレベルのボックスに加えて、<code>moov</code> の子は再帰的に展開します。</p>
+    <div id="box-tree" class="tree"></div>
+  </section>
+
+  <section id="samples-section" hidden>
+    <h2>サンプル一覧 <span id="sample-total"></span></h2>
+    <div id="samples-viewport" class="viewport" tabindex="0">
+      <div id="samples-spacer" class="spacer"></div>
+      <table id="samples-table">
+        <thead>
+          <tr>
+            <th>#</th><th>Track</th><th>Entry</th><th>Key</th>
+            <th>Timestamp</th><th>Dur</th><th>CTO</th>
+            <th>Offset</th><th>Size</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="log-section" hidden>
+    <h2>範囲読み込みログ</h2>
+    <p class="note">実際に <code>File.slice</code> で読み込んだ範囲です。
+      ファイル全体や <code>mdat</code> ペイロードを読んでいないことが確認できます。</p>
+    <div id="read-log" class="readlog"></div>
+  </section>
+
+  <section id="json-section" hidden>
+    <h2>JSON エクスポート</h2>
+    <p class="note">
+      CLI (<code>src/examples/demux</code>) と同じ canonical スキーマです。
+      64bit 値は十進文字列です。
+    </p>
+    <button id="download-button" type="button">JSON をダウンロード</button>
+    <textarea id="json-output" rows="20" readonly></textarea>
+  </section>
+</main>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>

@@ -1,6 +1,7 @@
 import {
   "gpui-mbt/mp4/bytes",
   "gpui-mbt/mp4/demux" @mp4_demux,
+  "gpui-mbt/mp4/demux_report",
   "moonbitlang/core/argparse",
   "moonbitlang/core/env",
   "moonbitlang/core/string",

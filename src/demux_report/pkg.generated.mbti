@@ -1,0 +1,32 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "gpui-mbt/mp4/demux_report"
+
+import {
+  "gpui-mbt/mp4/bytes",
+  "gpui-mbt/mp4/demux",
+}
+
+// Values
+pub fn report_json(file~ : String, ArrayView[@demux.TrackInfo], ArrayView[@demux.Sample], truncated~ : Bool, codec_map? : Map[UInt, Json], extra_fields? : Array[(String, Json)]) -> Json
+
+pub fn report_json_string(Json) -> String
+
+pub fn sample_items_json(ArrayView[@demux.Sample], offset? : Int, limit? : Int) -> Array[Json]
+
+pub fn sample_json(Int, @demux.Sample) -> Json
+
+pub fn track_codec_map(ArrayView[@demux.Sample]) -> Map[UInt, Json]
+
+pub fn track_items_json(ArrayView[@demux.TrackInfo], codec_map? : Map[UInt, Json]) -> Array[Json]
+
+pub fn track_json(Int, @demux.TrackInfo, codec? : Json) -> Json
+
+pub fn track_kind_name(@bytes.TrackKind) -> String
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

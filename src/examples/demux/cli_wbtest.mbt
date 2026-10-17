@@ -198,6 +198,7 @@ async test "JSON 出力は厳密なスキーマに一致する" {
       #|      "index": 0,
       #|      "track_id": 1,
       #|      "kind": "audio",
+      #|      "codec": "mp4a.40.2",
       #|      "duration": "45124",
       #|      "timescale": 44100
       #|    }

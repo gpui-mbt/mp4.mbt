@@ -8,6 +8,24 @@ versions (`M0`–`M5`); unreleased work is listed under `Unreleased`.
 
 ### Added
 
+- Browser MP4 dump demo (issue 0015): `web/` gains a self-contained static app
+  (`index.html`, `app.js`, `style.css`, `build.sh`) deployed to GitHub Pages
+  via `.github/workflows/pages.yml`. `src/webdump` is a `foreign_library`
+  MoonBit package exporting an 11-function ESM session API (`mp4dump_create` /
+  `mp4dump_next_request` / `mp4dump_feed` / `mp4dump_state` /
+  `mp4dump_cancel` / `mp4dump_report_json` / `mp4dump_tracks_json` /
+  `mp4dump_samples_json` / `mp4dump_box_tree_json` / `mp4dump_read_log_json` /
+  `mp4dump_error_json`); `web/app.js` answers each request with `File.slice`
+  range reads, so `mdat` payload is never fetched and no DOM/File API enters
+  core. `src/demux_report` is the shared canonical JSON renderer — the CLI's
+  `--json` now delegates to it and gains a per-track `codec` field (first
+  displayed sample entry, `null` when no sample was shown). Cancellation and
+  re-selection discard stale async results via a generation counter in
+  `app.js`; the UI uses a virtualized table for samples. A Playwright E2E
+  (`web/e2e/e2e.mjs`, local tool) verifies file selection, rendering,
+  re-selection, cancellation, error paths and the no-`mdat`-payload read log.
+  CI gains a `web-build` job (bundle build + Node ESM smoke) (issue 0015).
+
 - Native demux CLI example (issue 0014): `src/examples/demux` ports upstream
   `examples/demux.rs` as a native-only executable
   (`moon run src/examples/demux --target native -- <file.mp4>`). The Sans I/O

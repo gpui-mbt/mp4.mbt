@@ -6,3 +6,5 @@ target
 .moonagent/
 .repos/
 *.log
+web/dist/
+web/e2e-screenshot.png

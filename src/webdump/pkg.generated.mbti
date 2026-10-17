@@ -1,0 +1,53 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "gpui-mbt/mp4/webdump"
+
+import {
+  "gpui-mbt/mp4/demux",
+}
+
+// Values
+pub fn mp4dump_box_tree_json(WebDumpSession) -> String
+
+pub fn mp4dump_cancel(WebDumpSession) -> Unit
+
+pub fn mp4dump_create(String, UInt64, UInt64) -> WebDumpSession
+
+pub fn mp4dump_error_json(WebDumpSession) -> String
+
+pub fn mp4dump_feed(WebDumpSession, Bytes) -> Unit
+
+pub fn mp4dump_next_request(WebDumpSession) -> String
+
+pub fn mp4dump_read_log_json(WebDumpSession) -> String
+
+pub fn mp4dump_report_json(WebDumpSession, Int) -> String
+
+pub fn mp4dump_samples_json(WebDumpSession, Int, Int) -> String
+
+pub fn mp4dump_state(WebDumpSession) -> String
+
+pub fn mp4dump_tracks_json(WebDumpSession) -> String
+
+// Errors
+
+// Types and methods
+pub struct WebDumpSession {
+  file_name : String
+  file_size : UInt64
+  max_read : UInt64
+  // private fields
+}
+pub fn WebDumpSession::box_tree_json(Self) -> Json
+pub fn WebDumpSession::cancel(Self) -> Unit
+pub fn WebDumpSession::error_json(Self) -> String
+pub fn WebDumpSession::new(String, UInt64, UInt64) -> Self
+pub fn WebDumpSession::next_request(Self) -> @demux.RequiredInput?
+pub fn WebDumpSession::read_log_json(Self) -> Json
+pub fn WebDumpSession::report_json(Self, max_samples~ : Int) -> Json
+pub fn WebDumpSession::samples_json(Self, offset~ : Int, count~ : Int) -> Json
+pub fn WebDumpSession::state(Self) -> String
+pub fn WebDumpSession::tracks_json(Self) -> Json
+
+// Type aliases
+
+// Traits

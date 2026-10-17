@@ -1,22 +1,12 @@
 // demux CLI の出力整形。
 // テキスト出力は upstream の examples/demux.rs に近い人間可読形式、
-// JSON 出力は本リポジトリのデータ契約 (64bit 整数は十進文字列) に従う。
-
-///|
-/// TrackKind の表示名 (upstream の `{:?}` 相当の小文字表現)。
-fn track_kind_name(kind : @bytes.TrackKind) -> String {
-  match kind {
-    Video => "video"
-    Audio => "audio"
-    Subtitle => "subtitle"
-  }
-}
+// JSON 出力は src/demux_report の canonical スキーマ (64bit 整数は十進文字列) に従う。
 
 ///|
 /// TrackInfo をテキスト行として整形する (upstream demux.rs 相当 + Kind 列)。
 fn format_track_text(index : Int32, track : @mp4_demux.TrackInfo) -> String {
   let track_id = track.track_id
-  let kind = track_kind_name(track.kind)
+  let kind = @demux_report.track_kind_name(track.kind)
   let duration = track.duration
   let timescale = track.timescale.get()
   "Track \{index}:\n" +
@@ -103,65 +93,22 @@ fn format_text(
 }
 
 ///|
-/// TrackInfo の JSON 表現。`duration` (u64) は十進文字列。
-fn track_json(index : Int32, track : @mp4_demux.TrackInfo) -> Json {
-  {
-    "index": index,
-    "track_id": track.track_id,
-    "kind": Json(track_kind_name(track.kind)),
-    "duration": track.duration.to_string(),
-    "timescale": track.timescale.get(),
-  }
-}
-
-///|
-/// Sample の JSON 表現。
-/// `timestamp` / `composition_time_offset` / `data_offset` (u64/i64) は十進文字列、
-/// `sample_entry` は新しいエントリに切り替わったサンプルでのみ 4CC 文字列。
-fn sample_json(index : Int32, sample : @mp4_demux.Sample) -> Json {
-  let sample_entry : Json = match sample.sample_entry {
-    Some(entry) => Json(entry.box_type().to_string())
-    None => null
-  }
-  let cto : Json = match sample.composition_time_offset {
-    Some(offset) => Json(offset.to_string())
-    None => null
-  }
-  {
-    "index": index,
-    "track_id": sample.track.track_id,
-    "sample_entry": sample_entry,
-    "keyframe": sample.keyframe,
-    "timestamp": sample.timestamp.to_string(),
-    "duration": sample.duration,
-    "composition_time_offset": cto,
-    "data_offset": sample.data_offset.to_string(),
-    "data_size": sample.data_size,
-  }
-}
-
-///|
-/// JSON 出力全体。64bit 値はすべて十進文字列で出力する。
+/// JSON 出力全体 (canonical スキーマは src/demux_report 側で定義)。
+/// `codec` 列には表示済みサンプルから推定した codec 文字列を載せる
+/// (サンプルが打ち切りで 1 つも現れなかったトラックは `null`)。
 fn format_json(
   file~ : String,
   tracks : ArrayView[@mp4_demux.TrackInfo],
   samples : ArrayView[@mp4_demux.Sample],
   truncated~ : Bool,
 ) -> String {
-  let track_items : Array[Json] = []
-  for i, track in tracks {
-    track_items.push(track_json(i, track))
-  }
-  let sample_items : Array[Json] = []
-  for i, sample in samples {
-    sample_items.push(sample_json(i, sample))
-  }
-  let doc : Json = {
-    "file": file,
-    "tracks": track_items,
-    "samples": sample_items,
-    "shown_samples": samples.length(),
-    "truncated": truncated,
-  }
-  doc.stringify(indent=2) + "\n"
+  let codec_map = @demux_report.track_codec_map(samples)
+  let doc = @demux_report.report_json(
+    file~,
+    tracks,
+    samples,
+    truncated~,
+    codec_map~,
+  )
+  @demux_report.report_json_string(doc)
 }

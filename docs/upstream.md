@@ -206,6 +206,21 @@ Issue 0007 で確定した対応の補足:
 
 - `moon.mod` の import に `moonbitlang/async@0.22.5` を追加した。依存は `src/examples/demux` のみで、コアパッケージ群（`bytes`/`box`/`boxes`/`codec_string`/`demux`）の Sans I/O・依存方向（`bytes <- box <- boxes <- demux`）は不変。
 
+### Issue 0015 で確定した対応の補足
+
+`examples/dump_wasm`（上流リポジトリ）→ `src/webdump` + `web/`（本リポジトリのブラウザデモ）。上流は wasm-pack クレートとして実装されているが、本リポジトリは MoonBit の JS target に直接対応させるため、wasm クレート自体の移植ではなく同じ目的の UI を独自構成で提供する。実行物の対応なので動作規約を記録する。
+
+| 上流 | MoonBit 側 | 備考 |
+| --- | --- | --- |
+| `examples/dump_wasm`（wasm クレート + `index.html`） | `src/webdump`（`foreign_library` pkgtype、`#export_name` で ESM 関数を公開）+ `web/`（静的 HTML/CSS/JS） | MoonBit core（`src/demux` / `src/boxes`）は JS target でそのまま動く。DOM・`File` API に触れるのは `web/app.js` だけで、core は引き続き Sans I/O |
+| 入力ファイル全量を `ArrayBuffer` 化して wasm に渡す | `File.slice` で `mp4dump_next_request` が返す絶対 range だけを逐次読み、`mp4dump_feed` で供給 | `Mp4FileKindDetector` / `Mp4FileDemuxer` の `required_input` 契約をそのまま使うため、`mdat` ペイロードなど不要な範囲は一切読まない（fixture では 1635 バイト中 919 バイトのみ）。上流の全量読み込みを意図的に改善した点 |
+| wasm 側で box 情報を JSON 化して textarea に出す | `mp4dump_report_json` / `mp4dump_tracks_json` / `mp4dump_samples_json` / `mp4dump_box_tree_json` / `mp4dump_read_log_json` / `mp4dump_error_json` | JSON は `src/demux_report` の canonical schema（CLI `src/examples/demux --json` と同一）で、64bit 値は十進文字列。`box_tree` はトップレベル box に加えて `moov` の子孫を再帰展開し、上流が注意書きしていた「出現順が入力順と一致しない」制約はない |
+| （キャンセル機構なし） | `mp4dump_cancel` + `web/app.js` の世代（generation）管理 | 再選択・キャンセルで古い非同期結果を破棄する。解析完了後もボタンは残り、セッションのクリアとして動く |
+| （未知 box は `"unknown": true` と注記） | box tree の未知 box は `dump_line` の type 名で表示 | 上流の JSON には未知 box フラグがあった。本実装は box type の表示に一本化 |
+
+- `src/demux_report`（CLI / Web 共有の canonical JSON レンダラ）を新設した。track 行に `codec` フィールド（表示された sample の entry 由来、sample が無い track は `null`）が追加され、CLI の JSON 出力も同一 schema に統一された。
+- 公開 ESM API は `mp4dump_create(name, file_size, max_read)` / `mp4dump_next_request` / `mp4dump_feed` / `mp4dump_state` / `mp4dump_cancel` / `mp4dump_*_json` の 11 関数のみ。`UInt64` は JS `BigInt`、`Bytes` は `Uint8Array` として受け渡しする。
+
 ### `demux` / `mux` / `bitstream`
 
 | 上流 | 概要 | MoonBit 側の対応（予定） |
@@ -221,7 +236,8 @@ Issue 0007 で確定した対応の補足:
 
 ### 上流の別クレート（本リポジトリの対象外）
 
-- `crates/c-api`（C ABI）、`crates/wasm`（WASM バインディング）、`examples/dump_wasm`、`examples/transcode_wasm`、`fuzz`、`pbt` は移植対象ではない。互換性を主張しない。
+- `crates/c-api`（C ABI）、`crates/wasm`（WASM バインディング）、`examples/transcode_wasm`、`fuzz`、`pbt` は移植対象ではない。互換性を主張しない。
+- `examples/dump_wasm` は Issue 0015 で独自構成のブラウザデモとして提供した（前述）。`crates/wasm` 自体は移植しない。
 - ブラウザ向けの出力は本リポジトリの MoonBit/JS ビルドとして独自に提供する（Issue 0015/0016）。
 
 ## 4. 対応規格
@@ -265,6 +281,7 @@ Issue 0007 で確定した対応の補足:
 
 ## 7. 更新履歴
 
+- 2026-10-18: Issue 0015（ブラウザ MP4 Dump デモ）の対応表を追記。`examples/dump_wasm` → `src/webdump` + `web/`（独自構成）、`File.slice` による Range I/O、`mp4dump_*` ESM export API、`src/demux_report` canonical JSON（CLI と共有、`codec` フィールド追加）、キャンセル/世代管理を記録。
 - 2026-10-18: Issue 0014（demux CLI サンプル）の対応表を追記。`examples/demux.rs` → `src/examples/demux`（native 実行パッケージ）、`required_input` 駆動の seek/read アダプタ、上流のバッファ切り詰めに対する `RequestTooLarge` の明示化、`--max-samples` / `--json` / `--buffer-size`、固定終了コード（0/2/3/4/5）、64bit の JSON 十進文字列規約、`moonbitlang/async` 依存の追加（実行パッケージ限定）を記録。
 - 2026-10-18: Issue 0013（通常 MP4 demuxer）の対応表を追記。`Mp4FileDemuxer` の同名 API（`prev_sample` / `seek` / `Duration` 含む）、`TrackInfo` / `Sample`、`(secs, nanos)` 辞書順の整数タイムスタンプ比較、エラー保持の take セマンティクス、未知 `hdlr` の skip、offset 加算の防御検査、oracle `demux-cases`（muxer 生成の合成入力を含む）を記録。
 - 2026-10-17: Issue 0011（codec string）の対応表を追記。`codec_string::from_sample_entry` → `src/codec_string` の同名関数、各 binding の書式規則（HEVC Annex E の bit-reverse / constraint 末尾省略、AV1 bit depth 分岐、AOT 31 エスケープ）、`H264ProfileLevelId` の未移植部分、字幕 entry の一時差（unsupported）、oracle `codec-strings-cases` を記録。

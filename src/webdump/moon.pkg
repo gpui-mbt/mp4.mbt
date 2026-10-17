@@ -1,0 +1,9 @@
+import {
+  "gpui-mbt/mp4/box",
+  "gpui-mbt/mp4/boxes",
+  "gpui-mbt/mp4/bytes",
+  "gpui-mbt/mp4/demux" @mp4_demux,
+  "gpui-mbt/mp4/demux_report",
+}
+
+pkgtype(kind: "foreign_library")
