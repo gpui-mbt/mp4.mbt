@@ -1,0 +1,16 @@
+import {
+  "gpui-mbt/mp4/bytes",
+  "gpui-mbt/mp4/boxes",
+  "gpui-mbt/mp4/demux" @mp4_demux,
+  "gpui-mbt/mp4/inspect",
+  "f4ah6o/gpui/platform/macos",
+  "f4ah6o/gpui/platform",
+  "f4ah6o/gpui/primitives",
+  "f4ah6o/gpui/scene",
+  "moonbitlang/core/env",
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+}
+
+supported_targets = "+native"
+pkgtype(kind: "executable")

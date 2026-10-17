@@ -8,6 +8,11 @@ versions (`M0`–`M5`); unreleased work is listed under `Unreleased`.
 
 ### Added
 
+- gpui.mbt Native MP4 Inspector (issue 0030): `native/inspector` separate
+  module with a native window rendering box tree / tracks / samples via
+  `SceneItem::text`, backed by the portable `src/inspect` model. `moon check`
+  passes; window E2E and large-file range-read behavior are NOT_RUN.
+
 - WebCodecs transcode demo (issue 0029): `web/transcode.html` +
   `web/transcode.js` decode a local MP4 with `VideoDecoder`, encode H.264 with
   `VideoEncoder`, and mux the chunks with the new `src/webtranscode`

@@ -24,7 +24,7 @@
 | Hybrid MP4 positions | Implemented | Unit PASS、実ファイル E2E は未実行 | 0027 |
 | 字幕 sample entry | Implemented | Unit / roundtrip PASS | 0028 |
 | WebCodecs transcode | Implemented | Node bundle smoke PASS、browser E2E NOT_RUN | 0029 |
-| Native gpui Inspector | Not started / Partial | NOT_RUN | 0030 |
+| Native gpui Inspector | Implemented（host）/ Partial（picker・大容量 read） | check PASS、window E2E NOT_RUN | 0030 |
 | fuzz / PBT | Partial | fast mutation suite PASS、長時間 fuzz NOT_RUN | 0031 |
 | 性能 baseline | Partial | read/I/O 回数の smoke のみ、時間・RSS NOT_RUN | 0032 |
 | 公開文書 | Implemented | 本 PR | 0033 |

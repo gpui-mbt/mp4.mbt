@@ -14,7 +14,7 @@ pub fn box_rows(nodes : Array[@boxes.BoxNode]) -> Array[String] {
 
 ///|
 /// トラック一覧を表示用の行にする。
-pub fn track_rows(tracks : Array[@demux.TrackInfo]) -> Array[String] {
+pub fn track_rows(tracks : ArrayView[@demux.TrackInfo]) -> Array[String] {
   let rows : Array[String] = []
   for track in tracks {
     rows.push(

@@ -64,7 +64,7 @@
 | Web MP4 Dump | （本リポジトリ独自） | Implemented（0015） | Unit / JS ESM smoke / Browser E2E |
 | Rust/WASM 差分 Lab | （本リポジトリ独自） | Implemented（0016） | Differential / Node runner / Browser E2E / CI artifact |
 | WebCodecs 変換デモ | （本リポジトリ独自） | Implemented（0029。browser E2E は NOT_RUN） | Unit / Node bundle smoke / Browser E2E |
-| Native Inspector (gpui.mbt) | （本リポジトリ独自） | Not started | Native UI E2E |
+| Native Inspector (gpui.mbt) | （本リポジトリ独自） | Implemented（0030。window E2E は NOT_RUN） | Native UI E2E |
 | C ABI | `crates/c-api` | 対象外 | — |
 | WASM バインディング（上流相当） | `crates/wasm` | 対象外 | — |
 | 動画 decode/encode 本体 | — | 対象外 | — |

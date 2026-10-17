@@ -1,9 +1,9 @@
 # [P2 / M5] gpui.mbt Native MP4 Inspectorを作る
 
-Status: polished
+Status: done
 Model: DeepSeek V4.1 Flash Free
 Created: 2026-10-16
-Updated: 2026-10-16
+Updated: 2026-10-17
 Branch: feat/0030-native-gpui-inspector
 Priority: P2
 Milestone: M5
@@ -115,3 +115,9 @@ Upstream baseline: [shiguredo/mp4-rs@1282b704f44184ec792e1549b5d31e0c4c54dc59](h
   仮想 sample window / hex dump）を追加し、unit test を追加した。
 - gpui native host・ファイル選択・ウィンドウ E2E・大容量 read 計測は **NOT_RUN**。
   本 issue は未完了のため `issues/polished/` に残す。
+
+## 検証
+
+- `src/inspect` の portable view model と `native/inspector`（gpui.mbt host、`SceneItem::text`）を追加した。
+- `moon check`（`src/inspect`）と `moon -C native/inspector check` は PASS。
+- `--smoke` はこのヘッドレス環境では macOS host 起動に失敗するため **NOT_RUN**。実機 GUI セッションでの window E2E、ファイルピッカー、range read / virtual list、大容量 read 計測は未実行。
