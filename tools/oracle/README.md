@@ -25,6 +25,9 @@ cd tools/oracle
 # one-off run (JSON on stdout)
 cargo run --quiet -- demux ../../tests/fixtures/upstream/black-h264-video.mp4
 
+# boundary-case table for BoxHeader (JSON on stdout)
+cargo run --quiet -- box-headers
+
 # regenerate all goldens and verify determinism + fixture hashes
 cd ../..
 moon run tools/oracle/regenerate_fixtures.mbtx
@@ -32,6 +35,28 @@ moon run tools/oracle/regenerate_fixtures.mbtx
 # fail instead of writing when a golden differs (CI / review use)
 moon run tools/oracle/regenerate_fixtures.mbtx -- --check
 ```
+
+### Box header case table
+
+`box-headers` runs the fixed boundary-case table in `src/main.rs`
+(`BOX_HEADER_CASES`) through the upstream `BoxHeader::decode_header_and_payload`
+and prints one normalised JSON row per case (success/failure, box type bytes,
+`u32`/`u64` size form, declared size, header/payload lengths, and the
+wire-preserving header re-encode).
+
+`box-headers --moonbit` emits the same table as the generated MoonBit test
+file `src/box/box_header_oracle_cases_test.mbt`, consumed by
+`src/box/box_header_oracle_test.mbt`:
+
+```bash
+cd tools/oracle
+cargo run --quiet -- box-headers --moonbit > ../../src/box/box_header_oracle_cases_test.mbt
+```
+
+The file is committed and must not be edited by hand. CI regenerates it and
+fails on any diff, so changing `BOX_HEADER_CASES` always requires regenerating
+the MoonBit side in the same commit (and the generated code must stay
+`moon fmt` clean).
 
 ## Normalised schema (version 1)
 

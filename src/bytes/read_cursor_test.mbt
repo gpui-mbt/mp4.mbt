@@ -56,8 +56,7 @@ test "read_fourcc reads four raw bytes" {
 test "short read fails with InsufficientBuffer and does not advance" {
   let cursor = @bytes.ReadCursor::new(b"\x01")
   try cursor.read_u16() catch {
-    @bytes.Mp4Error(kind~, reason~, offset~, loc~) => {
-      ignore(loc)
+    @bytes.Mp4Error(kind~, reason~, offset~, ..) => {
       inspect(kind.to_string(), content="InsufficientBuffer")
       inspect(reason, content="required 2 bytes, but only 1 bytes available")
       inspect(offset == Some(0UL), content="true")
@@ -73,8 +72,7 @@ test "short read fails with InsufficientBuffer and does not advance" {
 test "zero length buffer reports empty input for one byte" {
   let cursor = @bytes.ReadCursor::new(b"")
   try cursor.read_u8() catch {
-    @bytes.Mp4Error(kind~, reason~, offset~, loc~) => {
-      ignore(loc)
+    @bytes.Mp4Error(kind~, reason~, offset~, ..) => {
       ignore(offset)
       inspect(kind.to_string(), content="InsufficientBuffer")
       inspect(reason, content="required 1 bytes, but only 0 bytes available")
@@ -93,10 +91,9 @@ test "error offset is base offset plus position" {
   )
   cursor.skip(1)
   try cursor.read_u32() catch {
-    @bytes.Mp4Error(kind~, reason~, offset~, loc~) => {
+    @bytes.Mp4Error(kind~, reason~, offset~, ..) => {
       ignore(kind)
       ignore(reason)
-      ignore(loc)
       inspect(offset == Some(101UL), content="true")
     }
   } noraise {
@@ -108,9 +105,8 @@ test "error offset is base offset plus position" {
 test "skip past the end fails without advancing" {
   let cursor = @bytes.ReadCursor::new(b"\x01\x02")
   try cursor.skip(3) catch {
-    @bytes.Mp4Error(kind~, reason~, offset~, loc~) => {
+    @bytes.Mp4Error(kind~, reason~, offset~, ..) => {
       ignore(reason)
-      ignore(loc)
       inspect(kind.to_string(), content="InsufficientBuffer")
       ignore(offset)
     }
@@ -127,10 +123,9 @@ test "rewind_to restores the position and rejects out of range values" {
   cursor.rewind_to(0)
   inspect(cursor.position(), content="0")
   try cursor.rewind_to(3) catch {
-    @bytes.Mp4Error(kind~, reason~, offset~, loc~) => {
+    @bytes.Mp4Error(kind~, reason~, offset~, ..) => {
       ignore(reason)
       ignore(offset)
-      ignore(loc)
       inspect(kind.to_string(), content="InvalidInput")
     }
   } noraise {
@@ -184,9 +179,8 @@ test "read_bytes enforces max_allocation_size without advancing" {
   let limits = @bytes.ParseLimits::new(max_allocation_size=3UL)
   let cursor = @bytes.ReadCursor::with_config(b"\x01\x02\x03\x04", 0UL, limits)
   try cursor.read_bytes(4) catch {
-    @bytes.Mp4Error(kind~, reason~, offset~, loc~) => {
+    @bytes.Mp4Error(kind~, reason~, offset~, ..) => {
       ignore(offset)
-      ignore(loc)
       inspect(kind.to_string(), content="Unsupported")
       inspect(
         reason,
@@ -205,10 +199,9 @@ test "read_bytes enforces max_allocation_size without advancing" {
 test "read_bytes_view is bounds checked even though it does not allocate" {
   let cursor = @bytes.ReadCursor::new(b"\x01")
   try cursor.read_bytes_view(2) catch {
-    @bytes.Mp4Error(kind~, reason~, offset~, loc~) => {
+    @bytes.Mp4Error(kind~, reason~, offset~, ..) => {
       ignore(reason)
       ignore(offset)
-      ignore(loc)
       inspect(kind.to_string(), content="InsufficientBuffer")
     }
   } noraise {
@@ -221,9 +214,8 @@ test "read_bytes_view is bounds checked even though it does not allocate" {
 test "negative read lengths are rejected as InvalidInput" {
   let cursor = @bytes.ReadCursor::new(b"\x01")
   try cursor.skip(-1) catch {
-    @bytes.Mp4Error(kind~, reason~, offset~, loc~) => {
+    @bytes.Mp4Error(kind~, reason~, offset~, ..) => {
       ignore(offset)
-      ignore(loc)
       inspect(kind.to_string(), content="InvalidInput")
       inspect(reason, content="read length must be non-negative: -1")
     }

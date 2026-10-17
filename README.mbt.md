@@ -31,17 +31,25 @@ Rust oracle as the default criterion.
 
 The end-to-end demux API is not implemented yet (M1 in progress). The foundation packages are
 `gpui-mbt/mp4/bytes` (bounds-safe Big Endian cursors, `Mp4Error` classification, `ParseLimits`,
-`FourCC`) and `gpui-mbt/mp4/bitstream` (MSB-first `BitReader`/`BitWriter`):
+`FourCC`, `BoxType`/`Uuid`, `Decode`/`Encode`), `gpui-mbt/mp4/bitstream` (MSB-first
+`BitReader`/`BitWriter`) and `gpui-mbt/mp4/box` (box envelope: `BoxHeader`/`BoxSize`,
+`FullBox` headers):
 
 ```mbt nocheck
 ///|
 import @bytes from "gpui-mbt/mp4/bytes"
+import @box from "gpui-mbt/mp4/box"
 
 fn main {
   let writer = @bytes.WriteCursor::new()
   writer.write_u16(0x1234)
   writer.write_u32(0x56789ABC)
   println(writer.to_bytes().length()) // 6
+
+  let cursor = @bytes.ReadCursor::new(b"\x00\x00\x00\x08mdat")
+  let (header, payload) = @box.BoxHeader::decode_header_and_payload(cursor)
+  println(header.box_size().get()) // 8
+  println(payload.length()) // 0
 }
 ```
 

@@ -14,6 +14,7 @@
 | `surface` | MoonBit の公開 API 関数・型 | `moon info` の `.mbti` と対応表（`upstream.md` §3）のレビュー | 公開 API の追加・変更時 |
 
 - M1（read-only）は `semantic` 一致を基本とする。`wire` 一致は decode→encode の往復テストなど、対象を限定して主張する。
+- `wire` 一致を主張する再 encode は、デコード時のサイズ形式（size32 / largesize）を保つ wire-preserving を既定とし、最小幅へ畳む canonical 変換は別 API（`to_canonical` など）で明示する（Issue 0006）。
 - 差分の観測値は JSON 正規化（64bit 整数は十進文字列）で比較し、フィールド単位で差分を追跡できるようにする（Issue 0004/0016）。
 - Rust 側の実行失敗・candidate 側の実行失敗は「一致」ではない。未実行は Unverified として記録する（§6）。
 
@@ -51,7 +52,7 @@
 | fMP4 file demux | `Fmp4FileDemuxer` | Not started | Unit / oracle |
 | 通常 MP4 file mux | `Mp4FileMuxer` | Not started | Unit / interop |
 | fMP4 segment mux | `Fmp4SegmentMuxer` | Not started | Unit / interop |
-| Box tree / box 単体 | `boxes` | Not started | Unit / wire 往復 |
+| Box tree / box 単体 | `boxes` | Partial（box envelope は 0006 で実装） | Unit / wire 往復 |
 | RFC 6381 codecs 文字列 | `codec_string` | Not started | Unit / oracle |
 | AVC/HEVC bitstream 補助 | `bitstream::{h264, h265}` | Not started | Unit / fixture |
 | AAC/Opus bitstream 補助 | `bitstream::{aac, opus}` | Not started | Unit / fixture |

@@ -7,9 +7,8 @@ test "uint64_to_index accepts Int index range" {
 ///|
 test "uint64_to_index rejects values above Int range instead of wrapping" {
   try @bytes.uint64_to_index(2147483648UL, "offset") catch {
-    @bytes.Mp4Error(kind~, reason~, offset~, loc~) => {
+    @bytes.Mp4Error(kind~, reason~, offset~, ..) => {
       ignore(offset)
-      ignore(loc)
       inspect(kind.to_string(), content="InvalidInput")
       inspect(reason, content="offset 2147483648 does not fit in an Int index")
     }
@@ -17,10 +16,9 @@ test "uint64_to_index rejects values above Int range instead of wrapping" {
     _ => fail("expected InvalidInput")
   }
   try @bytes.uint64_to_index(18446744073709551615UL, "size") catch {
-    @bytes.Mp4Error(kind~, reason~, offset~, loc~) => {
+    @bytes.Mp4Error(kind~, reason~, offset~, ..) => {
       ignore(kind)
       ignore(offset)
-      ignore(loc)
       inspect(
         reason,
         content="size 18446744073709551615 does not fit in an Int index",
@@ -44,9 +42,8 @@ test "uint64_to_exact_double accepts values up to 2^53" {
 ///|
 test "uint64_to_exact_double rejects values that would round" {
   try @bytes.uint64_to_exact_double(9007199254740993UL) catch {
-    @bytes.Mp4Error(kind~, reason~, offset~, loc~) => {
+    @bytes.Mp4Error(kind~, reason~, offset~, ..) => {
       ignore(offset)
-      ignore(loc)
       inspect(kind.to_string(), content="InvalidInput")
       inspect(
         reason,

@@ -31,9 +31,11 @@ pub fn ErrorKind::to_string(self : ErrorKind) -> String {
 ///|
 /// MP4 の解析・構築で共通に使うエラー。
 ///
-/// 失敗を「分類（[`ErrorKind`]）」「理由」「入力中の byte offset」「発生位置」で
-/// 表す。`offset` は未確定な場合 `None` になり、[`Mp4Error::with_offset`] は
-/// 最初に設定された値だけを残す（内側のより正確な位置を外側が上書きしない）。
+/// 失敗を「分類（[`ErrorKind`]）」「理由」「入力中の byte offset」「MP4 ボックス種別」
+/// 「発生位置」で表す。`offset` は未確定な場合 `None` になり、
+/// [`Mp4Error::with_offset`] は最初に設定された値だけを残す（内側のより正確な位置を
+/// 外側が上書きしない）。`box_type` も同様に [`Mp4Error::with_box_type`] の初回設定だけを
+/// 残す。
 ///
 /// `loc` は `#callsite` によって自動補完されるため、呼び出し側が明示する必要はない。
 ///
@@ -52,6 +54,7 @@ pub(all) suberror Mp4Error {
     kind~ : ErrorKind,
     reason~ : String,
     offset~ : UInt64?,
+    box_type~ : BoxType?,
     loc~ : SourceLoc
   )
 }
@@ -64,7 +67,7 @@ pub fn Mp4Error::new(
   reason : StringView,
   loc~ : SourceLoc,
 ) -> Mp4Error {
-  Mp4Error(kind~, reason=reason.to_owned(), offset=None, loc~)
+  Mp4Error(kind~, reason=reason.to_owned(), offset=None, box_type=None, loc~)
 }
 
 ///|
@@ -108,6 +111,7 @@ pub fn Mp4Error::insufficient_buffer(
     kind=InsufficientBuffer,
     reason="required \{required} bytes, but only \{available} bytes available",
     offset=None,
+    box_type=None,
     loc~,
   )
 }
@@ -116,20 +120,40 @@ pub fn Mp4Error::insufficient_buffer(
 /// エラーに byte offset を設定する（既に設定済みの場合は変更しない）。
 pub fn Mp4Error::with_offset(self : Mp4Error, new_offset : UInt64) -> Mp4Error {
   match self {
-    Mp4Error(kind~, reason~, offset~, loc~) =>
+    Mp4Error(kind~, reason~, offset~, box_type~, loc~) =>
       if offset is Some(_) {
         self
       } else {
-        Mp4Error(kind~, reason~, offset=Some(new_offset), loc~)
+        Mp4Error(kind~, reason~, offset=Some(new_offset), box_type~, loc~)
       }
   }
 }
 
 ///|
-/// エラーを `{分類}: {理由} (at {位置})` 形式に整形する。
+/// エラーに MP4 ボックス種別を設定する（既に設定済みの場合は変更しない）。
+pub fn Mp4Error::with_box_type(
+  self : Mp4Error,
+  new_box_type : BoxType,
+) -> Mp4Error {
+  match self {
+    Mp4Error(kind~, reason~, offset~, box_type~, loc~) =>
+      if box_type is Some(_) {
+        self
+      } else {
+        Mp4Error(kind~, reason~, offset~, box_type=Some(new_box_type), loc~)
+      }
+  }
+}
+
+///|
+/// エラーを `[{ボックス種別}] {分類}: {理由}{位置} (at {発生位置})` 形式に整形する。
 pub fn Mp4Error::to_string(self : Mp4Error) -> String {
   match self {
-    Mp4Error(kind~, reason~, offset~, loc~) => {
+    Mp4Error(kind~, reason~, offset~, box_type~, loc~) => {
+      let prefix = match box_type {
+        Some(box_type) => "[\{box_type.to_string()}] "
+        None => ""
+      }
       let detail = if reason.is_empty() {
         kind.to_string()
       } else {
@@ -139,7 +163,7 @@ pub fn Mp4Error::to_string(self : Mp4Error) -> String {
         Some(offset) => " offset=\{offset}"
         None => ""
       }
-      "\{detail}\{position} (at \{loc})"
+      "\{prefix}\{detail}\{position} (at \{loc})"
     }
   }
 }

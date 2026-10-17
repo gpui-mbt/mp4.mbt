@@ -43,9 +43,8 @@ test "read_bits64 reads 64 bit values" {
 test "read_bits rejects widths above 32" {
   let reader = @bitstream.BitReader::new(b"\x01")
   try reader.read_bits(33) catch {
-    @bytes.Mp4Error(kind~, reason~, offset~, loc~) => {
+    @bytes.Mp4Error(kind~, reason~, offset~, ..) => {
       ignore(offset)
-      ignore(loc)
       inspect(kind.to_string(), content="InvalidInput")
       inspect(reason, content="bit width must be 0..=32: 33")
     }
@@ -58,9 +57,8 @@ test "read_bits rejects widths above 32" {
 test "truncated bit reads fail with InvalidInput and do not advance" {
   let reader = @bitstream.BitReader::new(b"\x01")
   try reader.read_bits(9) catch {
-    @bytes.Mp4Error(kind~, reason~, offset~, loc~) => {
+    @bytes.Mp4Error(kind~, reason~, offset~, ..) => {
       ignore(offset)
-      ignore(loc)
       inspect(kind.to_string(), content="InvalidInput")
       inspect(
         reason,
@@ -90,10 +88,9 @@ test "skip_bits and byte_align move without reading" {
 test "skip_bits past the end fails without advancing" {
   let reader = @bitstream.BitReader::new(b"\x00")
   try reader.skip_bits(9) catch {
-    @bytes.Mp4Error(kind~, reason~, offset~, loc~) => {
+    @bytes.Mp4Error(kind~, reason~, offset~, ..) => {
       ignore(reason)
       ignore(offset)
-      ignore(loc)
       inspect(kind.to_string(), content="InvalidInput")
     }
   } noraise {

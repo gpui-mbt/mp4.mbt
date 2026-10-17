@@ -14,7 +14,7 @@ results are reported. The workflow files are `.github/workflows/ci.yml` and
 | `moon-test-js` | js | `moon test --target js` | unit tests (same values/errors as native) |
 | `moon-fmt` | — | `moon fmt --check` | formatting diff |
 | `moon-info` | — | `moon info` + `git diff --exit-code -- '*.mbti'` | public API (`surface`) drift |
-| `oracle` | Rust + MoonBit | `cargo test` (tools/oracle) and `moon run tools/oracle/regenerate_fixtures.mbtx -- --check` | pinned oracle tests, fixture hashes, golden determinism |
+| `oracle` | Rust + MoonBit | `cargo test` (tools/oracle), `moon run tools/oracle/regenerate_fixtures.mbtx -- --check`, and the `box-headers --moonbit` diff | pinned oracle tests, fixture hashes, golden determinism, generated box-header case table |
 
 - Required checks for merge (branch protection): the 5 MoonBit jobs plus
   `oracle`. Configure them in the repository settings; this list is the
@@ -51,6 +51,10 @@ moon info && git diff --exit-code -- '*.mbti'
 # Oracle (same commands as CI)
 cd tools/oracle && cargo test && cd ../..
 moon run tools/oracle/regenerate_fixtures.mbtx -- --check
+cd tools/oracle
+cargo run --quiet -- box-headers --moonbit > /tmp/box_header_oracle_cases.mbt
+diff -u ../../src/box/box_header_oracle_cases_test.mbt /tmp/box_header_oracle_cases.mbt
+cd ../..
 ```
 
 ## Failure injection (CI contract verification)
@@ -65,6 +69,8 @@ runners are not available:
    and the `moon-info` job fails.
 5. Fail any MoonBit test → the Pages deploy job is not started because it
    requires `workflow_run.conclusion == success` on `main`.
+6. Edit `src/box/box_header_oracle_cases_test.mbt` (or the Rust case table in
+   `tools/oracle/src/main.rs`) → the `oracle` job's generated-table diff fails.
 
 ## Pages deployment
 

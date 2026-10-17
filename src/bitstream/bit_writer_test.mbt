@@ -40,9 +40,8 @@ test "bit roundtrip through BitReader" {
 test "write_bits rejects widths above 32" {
   let writer = @bitstream.BitWriter::new()
   try writer.write_bits(0, 33) catch {
-    @bytes.Mp4Error(kind~, reason~, offset~, loc~) => {
+    @bytes.Mp4Error(kind~, reason~, offset~, ..) => {
       ignore(offset)
-      ignore(loc)
       inspect(kind.to_string(), content="InvalidInput")
       inspect(reason, content="bit width must be 0..=32: 33")
     }

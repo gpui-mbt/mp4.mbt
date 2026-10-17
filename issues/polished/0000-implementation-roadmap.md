@@ -171,7 +171,7 @@ M1 では**動画そのものの再生や変換**を UI に表示できなくて
 #### M1 – Boxes / read-only MP4 / first demos
 
 - [x] [0005 Bounds-safeなバイト列・ビット列・エラー型を作る](../done/0005-safe-bytes.md) — P0 / deps: 0002, 0004
-- [ ] [0006 BoxHeader・BoxSize・FourCC・uuidを実装する](./0006-box-header.md) — P0 / deps: 0005
+- [x] [0006 BoxHeader・BoxSize・FourCC・uuidを実装する](../done/0006-box-header.md) — P0 / deps: 0005
 - [ ] [0007 ftyp・mdat・free・UnknownBoxとBox treeを実装する](./0007-root-box-tree.md) — P0 / deps: 0006
 - [ ] [0008 moov／trak／mdia／minfと時刻情報を移植する](./0008-movie-track-boxes.md) — P0 / deps: 0007
 - [ ] [0009 stblとSampleTableAccessorを移植する](./0009-sample-tables.md) — P0 / deps: 0008

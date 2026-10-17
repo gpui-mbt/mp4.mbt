@@ -107,3 +107,10 @@ jobs:
           echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
       - name: Verify fixture hashes and golden determinism
         run: moon run tools/oracle/regenerate_fixtures.mbtx -- --check
+      - name: Verify generated box-header oracle cases
+        working-directory: tools/oracle
+        run: |
+          cargo run --quiet -- box-headers --moonbit > /tmp/box_header_oracle_cases.mbt
+          diff -u ../../src/box/box_header_oracle_cases_test.mbt /tmp/box_header_oracle_cases.mbt
+          printf 'generated box-header case table is in sync (%s cases)\n' \
+            "$(grep -c '    name: ' ../../src/box/box_header_oracle_cases_test.mbt)"

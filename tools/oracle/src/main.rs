@@ -20,7 +20,7 @@ use std::path::Path;
 use std::process::ExitCode;
 
 use shiguredo_mp4::demux::{DemuxError, Input, Mp4FileDemuxer, Mp4FileKind, Mp4FileKindDetector};
-use shiguredo_mp4::{BaseBox, TrackKind};
+use shiguredo_mp4::{BaseBox, BoxHeader, BoxSize, Encode, TrackKind};
 
 /// Pinned upstream revision (must match Cargo.toml and docs/upstream.md).
 const UPSTREAM_SHA: &str = "1282b704f44184ec792e1549b5d31e0c4c54dc59";
@@ -47,8 +47,18 @@ fn main() -> ExitCode {
                 ExitCode::FAILURE
             }
         },
+        Some("box-headers") if args.len() == 2 => {
+            println!("{}", run_box_headers());
+            ExitCode::SUCCESS
+        }
+        Some("box-headers") if args.len() == 3 && args[2] == "--moonbit" => {
+            print!("{}", box_header_moonbit_cases());
+            ExitCode::SUCCESS
+        }
         _ => {
             eprintln!("usage: mp4-oracle demux <mp4-file>");
+            eprintln!("       mp4-oracle box-headers");
+            eprintln!("       mp4-oracle box-headers --moonbit");
             ExitCode::from(2)
         }
     }
@@ -101,7 +111,10 @@ fn kind_json(data: &[u8]) -> String {
         }
         Ok(None) => "{\"status\": \"unverified\", \"value\": null}".to_owned(),
         Err(e) => {
-            format!("{{\"status\": \"error\", \"error\": {}}}", demux_error_json(&e))
+            format!(
+                "{{\"status\": \"error\", \"error\": {}}}",
+                demux_error_json(&e)
+            )
         }
     }
 }
@@ -300,7 +313,8 @@ fn json_string_to(s: &str) -> String {
 }
 
 /// Minimal dependency-free SHA-256 (FIPS 180-4).
-fn sha256_hex(data: &[u8]) -> String {    const K: [u32; 64] = [
+fn sha256_hex(data: &[u8]) -> String {
+    const K: [u32; 64] = [
         0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4,
         0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe,
         0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f,
@@ -382,9 +396,277 @@ fn sha256_hex(data: &[u8]) -> String {    const K: [u32; 64] = [
     out
 }
 
+/// Fixed `BoxHeader` boundary-case table shared with the MoonBit differential
+/// test (`src/box/box_header_oracle_test.mbt`).
+///
+/// Changing this table changes the generated MoonBit case file; regenerate it
+/// with `moon run tools/oracle/generate_box_header_cases.mbtx`.
+const BOX_HEADER_CASES: &[(&str, &[u8])] = &[
+    ("size8_mdat", b"\x00\x00\x00\x08mdat"),
+    (
+        "size16_payload",
+        b"\x00\x00\x00\x10mdat\xAA\xBB\xCC\xDD\xEE\xFF\x00\x11",
+    ),
+    (
+        "largesize24",
+        b"\x00\x00\x00\x01mdat\x00\x00\x00\x00\x00\x00\x00\x18\x11\x11\x11\x11\x11\x11\x11\x11",
+    ),
+    ("size0_tail", b"\x00\x00\x00\x00mdat\xAA\xBB\xCC"),
+    ("size0_header_only", b"\x00\x00\x00\x00free"),
+    (
+        "largesize0",
+        b"\x00\x00\x00\x01mdat\x00\x00\x00\x00\x00\x00\x00\x00",
+    ),
+    ("size4_too_small", b"\x00\x00\x00\x04mdat"),
+    ("size16_truncated", b"\x00\x00\x00\x10mdat\xAA\xBB"),
+    (
+        "largesize_missing",
+        b"\x00\x00\x00\x01mdat\x00\x00\x00\x00\x00\x00\x00",
+    ),
+    (
+        "uuid_largesize40",
+        b"\x00\x00\x00\x01uuid\x6B\xC0\xA5\xA1\x8B\x2E\x4A\x71\xB0\x2C\xD0\x5B\x8B\x1B\x3F\x9F\x00\x00\x00\x00\x00\x00\x00\x28\x00\x01\x02\x03\x04\x05\x06\x07",
+    ),
+    (
+        "uuid32",
+        b"\x00\x00\x00\x20uuid\x6B\xC0\xA5\xA1\x8B\x2E\x4A\x71\xB0\x2C\xD0\x5B\x8B\x1B\x3F\x9F\x00\x00\x00\x00\x00\x00\x00\x08",
+    ),
+    (
+        "uuid_missing_usertype",
+        b"\x00\x00\x00\x20uuid\x6B\xC0\xA5\xA1\x8B\x2E\x4A\x71\xB0\x2C",
+    ),
+    (
+        "unknown_control_fourcc",
+        b"\x00\x00\x00\x0C\xFF\x00AB\x00\x01\x02\x03",
+    ),
+];
+
+/// One row of the `BoxHeader` boundary-case table, normalised so that both the
+/// JSON and MoonBit emitters describe exactly the same observation.
+enum BoxHeaderOutcome {
+    Ok {
+        box_type: Vec<u8>,
+        size_kind: &'static str,
+        size: u64,
+        external_size: usize,
+        payload_size: usize,
+        reencoded: Vec<u8>,
+    },
+    Err {
+        error_kind: &'static str,
+    },
+}
+
+fn box_header_outcome(input: &[u8]) -> BoxHeaderOutcome {
+    match BoxHeader::decode_header_and_payload(input) {
+        Ok((header, payload)) => {
+            let (size_kind, size) = match header.box_size {
+                BoxSize::U32(v) => ("u32", u64::from(v)),
+                BoxSize::U64(v) => ("u64", v),
+            };
+            let mut buffer = vec![0u8; header.external_size()];
+            let reencoded = match header.encode(&mut buffer) {
+                Ok(n) => buffer[..n].to_vec(),
+                Err(e) => panic!("header re-encode failed: {}", error_kind_str(e.kind)),
+            };
+            BoxHeaderOutcome::Ok {
+                box_type: header.box_type.as_bytes().to_vec(),
+                size_kind,
+                size,
+                external_size: header.external_size(),
+                payload_size: payload.len(),
+                reencoded,
+            }
+        }
+        Err(error) => BoxHeaderOutcome::Err {
+            error_kind: error_kind_str(error.kind),
+        },
+    }
+}
+
+/// Runs the fixed `BoxHeader` boundary-case table and emits the normalised
+/// JSON consumed by the MoonBit differential test generator.
+fn run_box_headers() -> String {
+    let mut items: Vec<String> = Vec::new();
+    for (name, input) in BOX_HEADER_CASES {
+        items.push(box_header_case_json(name, input));
+    }
+    format!(
+        "{{\"schema\": {SCHEMA_VERSION}, \"upstream_sha\": \"{UPSTREAM_SHA}\", \"cases\": [{}]}}",
+        items.join(", ")
+    )
+}
+
+fn box_header_case_json(name: &str, input: &[u8]) -> String {
+    match box_header_outcome(input) {
+        BoxHeaderOutcome::Ok {
+            box_type,
+            size_kind,
+            size,
+            external_size,
+            payload_size,
+            reencoded,
+        } => format!(
+            "{{\"name\": \"{name}\", \"input\": \"{}\", \"ok\": true, \"box_type\": \"{}\", \"size_kind\": \"{size_kind}\", \"size\": \"{size}\", \"external_size\": {}, \"payload_size\": {}, \"reencoded\": \"{}\"}}",
+            hex(input),
+            hex(&box_type),
+            external_size,
+            payload_size,
+            hex(&reencoded),
+        ),
+        BoxHeaderOutcome::Err { error_kind } => format!(
+            "{{\"name\": \"{name}\", \"input\": \"{}\", \"ok\": false, \"error_kind\": \"{error_kind}\"}}",
+            hex(input)
+        ),
+    }
+}
+
+/// Emits the MoonBit case-table file consumed by
+/// `src/box/box_header_oracle_test.mbt`.
+///
+/// The output is committed as `src/box/box_header_oracle_cases_test.mbt` and
+/// compared byte for byte in CI (`moon fmt --check` also guards the format).
+fn box_header_moonbit_cases() -> String {
+    let mut out = String::new();
+    let _ = writeln!(
+        out,
+        "// Generated by `cargo run -- box-headers --moonbit` (tools/oracle)."
+    );
+    let _ = writeln!(
+        out,
+        "// Source of truth: tools/oracle/src/main.rs (BOX_HEADER_CASES)."
+    );
+    let _ = writeln!(out, "// Upstream: shiguredo/mp4-rs@{UPSTREAM_SHA}");
+    let _ = writeln!(out, "// DO NOT EDIT MANUALLY. Regenerate:");
+    let _ = writeln!(
+        out,
+        "//   cargo run --manifest-path tools/oracle/Cargo.toml -- box-headers --moonbit \\"
+    );
+    let _ = writeln!(out, "//     > src/box/box_header_oracle_cases_test.mbt");
+    let _ = writeln!(out);
+    let _ = writeln!(out, "///|");
+    let _ = writeln!(out, "/// Rust oracle の `BoxHeader` 境界ケース 1 件分。");
+    let _ = writeln!(out, "///");
+    let _ = writeln!(
+        out,
+        "/// oracle の `box-headers` モード（固定ケース表）から生成される。手で編集しない。"
+    );
+    let _ = writeln!(out, "struct OracleBoxHeaderCase {{");
+    for field in [
+        "name : String",
+        "input : Bytes",
+        "ok : Bool",
+        "box_type : Bytes",
+        "size_kind : String",
+        "size : UInt64",
+        "external_size : Int32",
+        "payload_size : Int32",
+        "reencoded : Bytes",
+        "error_kind : String",
+    ] {
+        let _ = writeln!(out, "  {field}");
+    }
+    let _ = writeln!(out, "}}");
+    let _ = writeln!(out);
+    let _ = writeln!(out, "///|");
+    let _ = writeln!(
+        out,
+        "/// `tools/oracle` の `box-headers` が返すケース表（生成物）。"
+    );
+    let _ = writeln!(
+        out,
+        "let oracle_box_header_cases : Array[OracleBoxHeaderCase] = ["
+    );
+    for (name, input) in BOX_HEADER_CASES {
+        let _ = writeln!(out, "  {{");
+        let _ = writeln!(out, "    name: \"{name}\",");
+        let _ = writeln!(out, "    input: {},", moonbit_bytes(input));
+        match box_header_outcome(input) {
+            BoxHeaderOutcome::Ok {
+                box_type,
+                size_kind,
+                size,
+                external_size,
+                payload_size,
+                reencoded,
+            } => {
+                let _ = writeln!(out, "    ok: true,");
+                let _ = writeln!(out, "    box_type: {},", moonbit_bytes(&box_type));
+                let _ = writeln!(out, "    size_kind: \"{size_kind}\",");
+                let _ = writeln!(out, "    size: {size}UL,");
+                let _ = writeln!(out, "    external_size: {external_size},");
+                let _ = writeln!(out, "    payload_size: {payload_size},");
+                let _ = writeln!(out, "    reencoded: {},", moonbit_bytes(&reencoded));
+                let _ = writeln!(out, "    error_kind: \"\",");
+            }
+            BoxHeaderOutcome::Err { error_kind } => {
+                let _ = writeln!(out, "    ok: false,");
+                let _ = writeln!(out, "    box_type: b\"\",");
+                let _ = writeln!(out, "    size_kind: \"\",");
+                let _ = writeln!(out, "    size: 0UL,");
+                let _ = writeln!(out, "    external_size: 0,");
+                let _ = writeln!(out, "    payload_size: 0,");
+                let _ = writeln!(out, "    reencoded: b\"\",");
+                let _ = writeln!(out, "    error_kind: \"{error_kind}\",");
+            }
+        }
+        let _ = writeln!(out, "  }},");
+    }
+    let _ = writeln!(out, "]");
+    out
+}
+
+/// Renders bytes as a MoonBit `b"..."` literal. Printable ASCII (except `"` and
+/// `\`) stays literal; everything else becomes `\xNN`.
+fn moonbit_bytes(data: &[u8]) -> String {
+    let mut out = String::with_capacity(data.len() + 3);
+    out.push_str("b\"");
+    for &byte in data {
+        if (0x20..=0x7e).contains(&byte) && byte != b'"' && byte != b'\\' {
+            out.push(byte as char);
+        } else {
+            let _ = write!(out, "\\x{byte:02x}");
+        }
+    }
+    out.push('"');
+    out
+}
+
+fn hex(data: &[u8]) -> String {
+    let mut out = String::with_capacity(data.len() * 2);
+    for byte in data {
+        let _ = write!(out, "{byte:02x}");
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn box_headers_output_is_deterministic_and_covers_boundaries() {
+        let json = run_box_headers();
+        assert_eq!(json, run_box_headers());
+        // size=0 のトップレベルは末尾までをペイロードにする
+        assert!(json.contains(
+            "\"name\": \"size0_tail\", \"input\": \"000000006d646174aabbcc\", \"ok\": true"
+        ));
+        // size がヘッダー長未満は invalid_input
+        assert!(json.contains("\"name\": \"size4_too_small\""));
+        assert!(json.contains("\"name\": \"size4_too_small\", \"input\": \"000000046d646174\", \"ok\": false, \"error_kind\": \"invalid_input\""));
+        // largesize=0 は可変長として扱わず invalid_data
+        assert!(json.contains("\"name\": \"largesize0\""));
+        assert!(json.contains("\"name\": \"largesize0\", \"input\": \"000000016d6461740000000000000000\", \"ok\": false, \"error_kind\": \"invalid_data\""));
+        // バッファ不足は insufficient_buffer
+        assert!(json.contains("\"name\": \"size16_truncated\""));
+        assert!(json.contains("\"name\": \"size16_truncated\", \"input\": \"000000106d646174aabb\", \"ok\": false, \"error_kind\": \"insufficient_buffer\""));
+        // uuid と largesize を含むケースが u64 総長として通る
+        assert!(json.contains("\"name\": \"uuid_largesize40\""));
+        assert!(json.contains(
+            "\"size_kind\": \"u64\", \"size\": \"40\", \"external_size\": 32, \"payload_size\": 8"
+        ));
+    }
 
     #[test]
     fn sha256_known_vectors() {

@@ -1,9 +1,9 @@
 # [P0 / M1] BoxHeader・BoxSize・FourCC・uuidを実装する
 
-Status: polished
+Status: done
 Model: DeepSeek V4.1 Flash Free
 Created: 2026-10-16
-Updated: 2026-10-16
+Updated: 2026-10-17
 Branch: feat/0006-box-header
 Priority: P0
 Milestone: M1
@@ -102,3 +102,7 @@ Upstream baseline: [shiguredo/mp4-rs@1282b704f44184ec792e1549b5d31e0c4c54dc59](h
 - 証跡ルール: checkboxは実際に実行した証拠がある項目だけ完了にする。実行コマンド・target・commit SHA・fixture checksum・PASS/FAIL/未実行の区分を残す（[0000](./0000-implementation-roadmap.md)と[0003](./0003-ci-contract.md)に整合）。
 - 実装時の未決事項: BoxSizeの表現、canonical/wire-preservingを分けるAPIの形、公開名。確定後は本issueへ追記する。
 - 2026-10-16: 本文を実装可能な形式へ整備し、実装に着手可能なため polished へ更新。
+- 2026-10-17: BoxHeader・BoxSize・BoxType（Uuid含む）・FullBox系ヘッダーの実装に着手
+- 2026-10-17: src/box（BoxSize/BoxHeader/FullBoxFlags/FullBoxHeader/BaseBox/FullBox）と src/bytes（BoxType/Uuid、Decode/Encode、decode_from/encode_to_bytes、Mp4Error.box_type/with_box_type）を実装。設計確定: BoxSizeはenum U32/U64、Encodeはデコード時のsize形式を保つwire-preserving、最小幅化はBoxHeader::to_canonical/BoxSize::to_canonical、size==0はdecode_header_and_payloadがカーソル末尾まで（U64(0)は不正）
+- 2026-10-17: 証跡: moon clean後のmoon check native/js 警告0、moon test --target native 104件PASS、--target js 104件PASS、moon fmt --check 差分なし、moon info 更新済み。Differential: tools/oracleにbox-headersモードを追加し13ケース（size=8/16・largesize・size==0・largesize=0・size<header・切り詰め・uuid正負・制御文字4CC）で成否/失敗分類/種別バイト/size形式/ヘッダー長/payload長/wire-preserving再エンコードをRustと比較（cargo test 3件PASS、regenerate_fixtures --check 9件unchanged、生成物src/box/box_header_oracle_cases_test.mbtはoracle出力とdiff一致、CIでも検証）
+- 2026-10-17: 入れ子size==0の拒否は上流UnknownBox::decode_top_levelに相当し、本文の対象外指定どおり0007で実装する（本issueはU32(0)=可変長とU64(0)=不正のvariant区別まで）

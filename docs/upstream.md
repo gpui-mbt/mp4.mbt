@@ -41,13 +41,13 @@ MoonBit 側の最終的な package / 公開名は Issue 0002 で確定し、本�
 
 | 上流 | 概要 | MoonBit 側の対応 |
 | --- | --- | --- |
-| `BaseBox` / `BoxHeader` / `BoxSize` / `BoxType` / `FullBox` / `FullBoxFlags` / `FullBoxHeader` | box envelope と共通ヘッダ | `src/box`（Issue 0006） |
+| `BaseBox` / `BoxHeader` / `BoxSize` / `BoxType` / `FullBox` / `FullBoxFlags` / `FullBoxHeader` | box envelope と共通ヘッダ | `src/box`（Issue 0006、完了） |
 | `Either<T, U>` | 2 形態の union | `src/bytes`（後続 Issue で追加。利用は 0008 以降） |
 | `FixedPointNumber` | 固定小数点数 | `src/bytes` の `FixedPointNumber`（Issue 0005、完了） |
 | `Uint` / `Utf8String` / `LanguageCode` | 基本値型 | `src/bytes`（後続 Issue で追加。利用は 0008 以降） |
 | `Mp4File` / `Mp4FileTime` / `TrackKind` / `SampleFlags` | 時刻・トラック・フラグ | `src/bytes` / `src/boxes`（Issue 0008 以降） |
 | `Error` / `ErrorKind` | 失敗分類 | `src/bytes` の `Mp4Error` / `ErrorKind`（Issue 0005、完了。`Either`/`Uint` 等は後続） |
-| `Decode` / `Encode` / `Result` | codec trait | `src/bytes`（Issue 0006） |
+| `Decode` / `Encode` / `Result` | codec trait | `src/bytes`（Issue 0006、完了） |
 | `aux::{ChunkAccessor, SampleAccessor, SampleTableAccessor, SampleTableAccessorError}` | sample table 走査 | `src/boxes`（Issue 0009） |
 
 Issue 0005 で確定した対応の補足:
@@ -55,12 +55,31 @@ Issue 0005 で確定した対応の補足:
 | 上流 | MoonBit 側 | 備考 |
 | --- | --- | --- |
 | `Result<T>` | `T raise Mp4Error` | MoonBit のエラー機構（`raise`/`catch`）で表現する |
-| `codec::Error` | `Mp4Error` | `Error` は MoonBit の予約型名のため改名。`kind` / `reason` / `loc`（`SourceLoc`）に加え `offset: UInt64?` を持つ |
+| `codec::Error` | `Mp4Error` | `Error` は MoonBit の予約型名のため改名。`kind` / `reason` / `loc`（`SourceLoc`）に加え `offset: UInt64?` と `box_type: BoxType?` を持つ |
 | 長さ付き入力の読み取り | `ReadCursor`（`src/bytes`） | Big Endian、位置は成功時のみ前進、確保量は `ParseLimits` で制限 |
 | 長さ付き出力の書き込み | `WriteCursor`（`src/bytes`） | 伸長バッファへ Big Endian 書き込み |
 | Rust の無制限 allocation/nesting | `ParseLimits`（`src/bytes`） | 既定値 `DEFAULT_MAX_ALLOCATION_SIZE` = 1 GiB、`DEFAULT_MAX_NESTING_DEPTH` = 64、上限は `ParseLimits::new` で変更 |
 | u64 → JS Number / index 変換 | `uint64_to_index` / `uint64_to_exact_double`（`src/bytes`） | 2^31-1 超の index、2^53 超の `Double` 化を暗黙に丸めず `InvalidInput` で拒否 |
 | 上流 `bitstream` のビット読み | `BitReader` / `BitWriter`（`src/bitstream`） | MSB 先。終端超過は `InvalidInput`。本格的な NAL/AAC/AV1 解析は M4（0024–0026） |
+
+Issue 0006 で確定した対応の補足:
+
+| 上流 | MoonBit 側 | 備考 |
+| --- | --- | --- |
+| `BoxType::{Normal([u8; 4]), Uuid([u8; 16])}` | `BoxType::{Normal(FourCC), Uuid(Uuid)}`（`src/bytes`） | 生 4 バイト / 16 バイトを保持。表示のみ差異: 上流は UTF-8 可なら生文字列、不可ならバイト列の Debug（十進）。MoonBit は printable のとき生文字列、非 printable は hex、uuid は 8-4-4-4-12 の hex |
+| `Uuid`（上流は `BoxType::Uuid([u8; 16])`） | `Uuid`（`src/bytes`） | 16 バイト固定の派生型。`from_bytes` は長さ不一致を `InvalidInput`（"uuid box type must be 16 bytes, but got N"） |
+| `BoxSize` | `BoxSize::{U32, U64}`（`src/box`） | `size==1` + `largesize` は `U64`。`U32(0)` は「EOF まで」、`U64(0)` はエンコード用プレースホルダでデコードでは不正 |
+| `BoxHeader::decode_header_and_payload` | `BoxHeader::decode_header_and_payload(ReadCursor)`（`src/box`） | `size==0` は渡されたカーソル末尾までをペイロードにする（トップレベル専用。入れ子の拒否は 0007 の `UnknownBox` 方針） |
+| `BoxHeader::decode` の再エンコード | `Encode for BoxHeader`（`src/box`） | デコード時の `BoxSize` variant を保持する（wire-preserving）。同一ペイロードで最小幅へ畳むのは `BoxSize::to_canonical` / `BoxHeader::to_canonical` |
+| `BoxHeader::MIN_SIZE` / `MAX_SIZE` | `MIN_BOX_HEADER_SIZE` / `MAX_BOX_HEADER_SIZE`（`src/box`） | associated const を持たないため package 定数（8 / 32） |
+| `BoxHeader::new` / `new_variable_size`（`pub(crate)`） | `BoxHeader::new` / `new_variable_size`（`pub`） | 後続 Issue の構築とテストのために公開する |
+| `BoxHeader::finalize_box_size`（`pub(crate)`、mux 用） | 未実装 | mux（Issue 0022）で必要になった時点で追加する |
+| `BoxSize::with_payload_size` | `BoxSize::with_payload_size`（`src/box`） | 4 + 種別長 + payload が 32-bit 超なら largesize（+8）。u64 overflow は上流と異なり明示的に `InvalidInput` |
+| `FullBoxFlags` | `FullBoxFlags`（`src/box`） | 24-bit を `UInt32` で保持。`new` は値をそのまま保持し、encode は下位 24-bit |
+| `FullBoxFlags::is_set` / `from_flags` のビット位置 | `Int32` | 呼び出し側の変換を避ける。負値と 32 以上は `false` / 無視（上流の usize と同様） |
+| `FullBoxHeader` / `FullBox` / `BaseBox` | 同名 trait / struct（`src/box`） | `BaseBox` は `box_type` / `is_unknown_box`（既定 `false`）/ `children`。`FullBoxHeader::from_box[F : FullBox]` |
+| `Decode` / `Encode` trait | `Decode` / `Encode`（`src/bytes`） | `decode(ReadCursor) -> Self raise Mp4Error` / `encode(Self, WriteCursor) raise Mp4Error`。失敗時に位置を巻き戻す `decode_from[T]`、バイト列化する `encode_to_bytes[T]` を併設 |
+| `Mp4Error` の box 情報 | `Mp4Error::with_box_type` / `box_type` フィールド（`src/bytes`） | `with_offset` と同様に初回設定のみを残し、`to_string` は `[種別] 分類: 理由 offset=N (at loc)` 形式 |
 
 ### `boxes` / `codec_string` / `descriptors`
 

@@ -8,6 +8,16 @@ versions (`M0`–`M5`); unreleased work is listed under `Unreleased`.
 
 ### Added
 
+- Box envelope foundations (issue 0006): `src/box` gains `BoxSize`
+  (`U32`/`U64`, variable-size markers, overflow-checked `with_payload_size`),
+  `BoxHeader` (decode/encode, top-level `size==0` payload extraction,
+  wire-preserving re-encode and `to_canonical`), `FullBoxFlags`/
+  `FullBoxHeader` and the `BaseBox`/`FullBox` traits. `src/bytes` gains
+  `BoxType` (`Normal`/`Uuid`), `Uuid`, the `Decode`/`Encode` traits with
+  `decode_from`/`encode_to_bytes`, and `Mp4Error::with_box_type`. The Rust
+  oracle gains a `box-headers` mode; its generated boundary-case table is
+  consumed by `src/box/box_header_oracle_test.mbt` and diffed in CI.
+
 - Bounds-safe byte/bit foundations (issue 0005): `src/bytes` gains the shared
   `Mp4Error`/`ErrorKind` classification, `ParseLimits`,
   `ReadCursor`/`WriteCursor` (Big Endian, position advances only on success),

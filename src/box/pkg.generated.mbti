@@ -1,0 +1,102 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "gpui-mbt/mp4/box"
+
+import {
+  "gpui-mbt/mp4/bytes",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub const MAX_BOX_HEADER_SIZE : Int = 32
+
+pub const MIN_BOX_HEADER_SIZE : Int = 8
+
+// Errors
+
+// Types and methods
+pub struct BoxHeader {
+  box_type : @bytes.BoxType
+  box_size : BoxSize
+} derive(Eq, Hash, @debug.Debug)
+pub fn BoxHeader::box_size(Self) -> BoxSize
+pub fn BoxHeader::box_type(Self) -> @bytes.BoxType
+pub fn BoxHeader::decode(@bytes.ReadCursor) -> Self raise @bytes.Mp4Error
+pub fn BoxHeader::decode_header_and_payload(@bytes.ReadCursor) -> (Self, BytesView) raise @bytes.Mp4Error
+pub fn BoxHeader::encode(Self, @bytes.WriteCursor) -> Unit raise @bytes.Mp4Error
+pub fn BoxHeader::equal(Self, Self) -> Bool
+pub fn BoxHeader::external_size(Self) -> Int
+pub fn BoxHeader::hash(Self) -> Int
+pub fn BoxHeader::hash_combine(Self, Hasher) -> Unit
+pub fn BoxHeader::new(@bytes.BoxType, BoxSize) -> Self
+pub fn BoxHeader::new_variable_size(@bytes.BoxType) -> Self
+pub fn BoxHeader::not_equal(Self, Self) -> Bool
+pub fn BoxHeader::to_canonical(Self) -> Self raise @bytes.Mp4Error
+pub fn BoxHeader::to_repr(Self) -> @debug.Repr
+pub impl @bytes.Decode for BoxHeader
+pub impl @bytes.Encode for BoxHeader
+
+pub(all) enum BoxSize {
+  U32(UInt)
+  U64(UInt64)
+} derive(Eq, Hash, @debug.Debug)
+pub fn BoxSize::equal(Self, Self) -> Bool
+pub fn BoxSize::external_size(Self) -> Int
+pub fn BoxSize::get(Self) -> UInt64
+pub fn BoxSize::hash(Self) -> Int
+pub fn BoxSize::hash_combine(Self, Hasher) -> Unit
+pub fn BoxSize::large_variable_size() -> Self
+pub fn BoxSize::not_equal(Self, Self) -> Bool
+pub fn BoxSize::to_canonical(Self, @bytes.BoxType) -> Self raise @bytes.Mp4Error
+pub fn BoxSize::to_repr(Self) -> @debug.Repr
+pub fn BoxSize::variable_size() -> Self
+pub fn BoxSize::with_payload_size(@bytes.BoxType, UInt64) -> Self raise @bytes.Mp4Error
+
+pub struct FullBoxFlags {
+  value : UInt
+} derive(Eq, Hash, @debug.Debug)
+pub fn FullBoxFlags::decode(@bytes.ReadCursor) -> Self raise @bytes.Mp4Error
+pub fn FullBoxFlags::empty() -> Self
+pub fn FullBoxFlags::encode(Self, @bytes.WriteCursor) -> Unit raise @bytes.Mp4Error
+pub fn FullBoxFlags::equal(Self, Self) -> Bool
+pub fn FullBoxFlags::from_flags(Array[(Int, Bool)]) -> Self
+pub fn FullBoxFlags::get(Self) -> UInt
+pub fn FullBoxFlags::hash(Self) -> Int
+pub fn FullBoxFlags::hash_combine(Self, Hasher) -> Unit
+pub fn FullBoxFlags::is_set(Self, Int) -> Bool
+pub fn FullBoxFlags::new(UInt) -> Self
+pub fn FullBoxFlags::not_equal(Self, Self) -> Bool
+pub fn FullBoxFlags::to_repr(Self) -> @debug.Repr
+pub impl @bytes.Decode for FullBoxFlags
+pub impl @bytes.Encode for FullBoxFlags
+
+pub struct FullBoxHeader {
+  version : UInt
+  flags : FullBoxFlags
+} derive(Eq, Hash, @debug.Debug)
+pub fn FullBoxHeader::decode(@bytes.ReadCursor) -> Self raise @bytes.Mp4Error
+pub fn FullBoxHeader::encode(Self, @bytes.WriteCursor) -> Unit raise @bytes.Mp4Error
+pub fn FullBoxHeader::equal(Self, Self) -> Bool
+pub fn FullBoxHeader::flags(Self) -> FullBoxFlags
+pub fn[F : FullBox] FullBoxHeader::from_box(F) -> Self
+pub fn FullBoxHeader::hash(Self) -> Int
+pub fn FullBoxHeader::hash_combine(Self, Hasher) -> Unit
+pub fn FullBoxHeader::new(UInt, FullBoxFlags) -> Self
+pub fn FullBoxHeader::not_equal(Self, Self) -> Bool
+pub fn FullBoxHeader::to_repr(Self) -> @debug.Repr
+pub fn FullBoxHeader::version(Self) -> UInt
+pub impl @bytes.Decode for FullBoxHeader
+pub impl @bytes.Encode for FullBoxHeader
+
+// Type aliases
+
+// Traits
+pub(open) trait BaseBox {
+  fn box_type(Self) -> @bytes.BoxType
+  fn is_unknown_box(Self) -> Bool = _
+  fn children(Self) -> Array[&BaseBox]
+}
+
+pub(open) trait FullBox : BaseBox {
+  fn full_box_version(Self) -> UInt
+  fn full_box_flags(Self) -> FullBoxFlags
+}

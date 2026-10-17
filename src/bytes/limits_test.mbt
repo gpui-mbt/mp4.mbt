@@ -22,9 +22,8 @@ test "check_allocation accepts the limit and rejects larger requests" {
   let limits = @bytes.ParseLimits::new(max_allocation_size=4UL)
   limits.check_allocation(4UL)
   try limits.check_allocation(5UL) catch {
-    @bytes.Mp4Error(kind~, reason~, offset~, loc~) => {
+    @bytes.Mp4Error(kind~, reason~, offset~, ..) => {
       ignore(offset)
-      ignore(loc)
       inspect(kind.to_string(), content="Unsupported")
       inspect(
         reason,
@@ -42,9 +41,8 @@ test "check_nesting_depth accepts the limit and rejects deeper nesting" {
   limits.check_nesting_depth(1)
   limits.check_nesting_depth(2)
   try limits.check_nesting_depth(3) catch {
-    @bytes.Mp4Error(kind~, reason~, offset~, loc~) => {
+    @bytes.Mp4Error(kind~, reason~, offset~, ..) => {
       ignore(offset)
-      ignore(loc)
       inspect(kind.to_string(), content="Unsupported")
       inspect(
         reason,
