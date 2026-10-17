@@ -8,6 +8,18 @@ versions (`M0`–`M5`); unreleased work is listed under `Unreleased`.
 
 ### Added
 
+- Fuzz / hardening (issue 0031): deterministic xorshift mutation, truncation
+  corpus, `src/fuzz` tests and a native `examples/fuzz` runner; limits and
+  seed/reproduction rules documented in `docs/fuzz.md`.
+- Performance harness (issue 0032): `src/examples/bench` reports Sans I/O read
+  counts, I/O bytes, tracks and samples as JSON; measurement/regression rules
+  in `docs/performance.md` (timed baseline and browser metrics are NOT_RUN).
+- Release and drift documentation (issues 0033–0034):
+  `docs/compatibility.md`, `docs/release-checklist.md`,
+  `docs/versioning.md`, `docs/upstream-drift.md`,
+  `tools/upstream-drift/audit.py`, and a PR template. Publish/tag/release and
+  the drift rehearsal remain NOT_RUN.
+
 - Codec helpers (issues 0024–0026): H.264/H.265 Annex B and length-prefixed
   NAL parsing/conversion plus `avc1`/`hev1`/`hvc1` construction; AAC
   AudioSpecificConfig and ADTS parse/wrap plus `mp4a`; Opus sample entry;

@@ -208,10 +208,10 @@ M1 では**動画そのものの再生や変換**を UI に表示できなくて
 
 - [ ] [0029 WebCodecsでローカルMP4変換デモを作る](./0029-webcodecs-transcode.md) — P2 / deps: 0015, 0022, 0024
 - [ ] [0030 gpui.mbt Native MP4 Inspectorを作る](./0030-native-gpui-inspector.md) — P2 / deps: 0013, 0015
-- [ ] [0031 変異テスト・fuzz・大規模不正入力の堅牢化](./0031-fuzz-pbt-hardening.md) — P1 / deps: 0004, 0005, 0006, 0013, 0018, 0022
-- [ ] [0032 Range I/O・メモリ・CPUのプロファイルを確立する](./0032-performance-profile.md) — P2 / deps: 0014, 0015, 0019, 0022
-- [ ] [0033 README・API・example・配布とversionを整備する](./0033-release-docs.md) — P1 / deps: 0003, 0013, 0014, 0015, 0016, 0031
-- [ ] [0034 上流追従と互換性監査を継続可能にする](./0034-upstream-drift.md) — P2 / deps: 0004, 0016, 0022, 0033
+- [x] [0031 変異テスト・fuzz・大規模不正入力の堅牢化](../done/0031-fuzz-pbt-hardening.md) — P1 / deps: 0004, 0005, 0006, 0013, 0018, 0022 / 検証: fast suite PASS, long fuzz NOT_RUN
+- [x] [0032 Range I/O・メモリ・CPUのプロファイルを確立する](../done/0032-performance-profile.md) — P2 / deps: 0014, 0015, 0019, 0022 / 検証: harness PASS, baseline NOT_RUN
+- [x] [0033 README・API・example・配布とversionを整備する](../done/0033-release-docs.md) — P1 / deps: 0003, 0013, 0014, 0015, 0016, 0031 / 検証: docs PASS, publish NOT_RUN
+- [x] [0034 上流追従と互換性監査を継続可能にする](../done/0034-upstream-drift.md) — P2 / deps: 0004, 0016, 0022, 0033 / 検証: tool/docs PASS, rehearsal NOT_RUN
 
 ### 進捗更新の規則
 

@@ -1,9 +1,9 @@
 # [P1 / M5] 変異テスト・fuzz・大規模不正入力の堅牢化
 
-Status: polished
+Status: done
 Model: DeepSeek V4.1 Flash Free
 Created: 2026-10-16
-Updated: 2026-10-16
+Updated: 2026-10-17
 Branch: test/0031-fuzz-pbt-hardening
 Priority: P1
 Milestone: M5
@@ -109,3 +109,8 @@ Upstream baseline: [shiguredo/mp4-rs@1282b704f44184ec792e1549b5d31e0c4c54dc59](h
 - 未決事項: PBT機構、corpus/seedの保存形式、リミット既定値、長時間fuzzの実行基盤は実装時に確定し、本issueへ追記する。
 - 証跡: 実行時間・回数・target・seed・再現コマンド・SHAをログまたはartifactとして残し、未実行をPASSと扱わない。
 - 2026-10-16: 本文を実装可能な形式へ整備し、実装に着手可能なため polished へ更新。
+
+## 検証
+
+- fast mutation suite (`moon test`, `src/examples/fuzz`) は PASS。長時間 fuzz・Rust 差分は NOT_RUN / UNVERIFIED。
+- `docs/fuzz.md` に seed 再現・記録規則を追加。

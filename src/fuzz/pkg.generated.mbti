@@ -1,0 +1,20 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "gpui-mbt/mp4/fuzz"
+
+// Values
+pub fn mutate_bytes(Bytes, UInt) -> Bytes
+
+pub fn truncations(Bytes) -> Array[Bytes]
+
+// Errors
+
+// Types and methods
+pub struct XorShift32 {
+  // private fields
+}
+pub fn XorShift32::new(UInt) -> Self
+pub fn XorShift32::next(Self) -> UInt
+
+// Type aliases
+
+// Traits

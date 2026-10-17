@@ -1,9 +1,9 @@
 # [P2 / M5] Range I/O・メモリ・CPUのプロファイルを確立する
 
-Status: polished
+Status: done
 Model: DeepSeek V4.1 Flash Free
 Created: 2026-10-16
-Updated: 2026-10-16
+Updated: 2026-10-17
 Branch: chore/0032-performance-profile
 Priority: P2
 Milestone: M5
@@ -98,3 +98,8 @@ Upstream baseline: [shiguredo/mp4-rs@1282b704f44184ec792e1549b5d31e0c4c54dc59](h
 - 未決事項: 性能setの最終リスト、bench harness名、出力形式、baselineの更新頻度は実装時に確定し、本issueへ追記する。
 - 証跡: ベンチ出力、manifest、入力SHA、OS/arch、commit SHA、warmup回数を残し、計測していない項目はNOT_RUN / UNVERIFIEDと明示する。
 - 2026-10-16: 本文を実装可能な形式へ整備し、実装に着手可能なため polished へ更新。
+
+## 検証
+
+- `src/examples/bench` は read 回数・I/O バイト数・track/sample 数を JSON で出力（manual run PASS）。
+- 経過時間・peak RSS・ブラウザ計測は NOT_RUN。`docs/performance.md` に手順と回帰条件を記載。

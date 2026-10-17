@@ -1,9 +1,9 @@
 # [P2 / M5] 上流追従と互換性監査を継続可能にする
 
-Status: polished
+Status: done
 Model: DeepSeek V4.1 Flash Free
 Created: 2026-10-16
-Updated: 2026-10-16
+Updated: 2026-10-17
 Branch: docs/0034-upstream-drift
 Priority: P2
 Milestone: M5
@@ -96,3 +96,8 @@ Upstream baseline: [shiguredo/mp4-rs@1282b704f44184ec792e1549b5d31e0c4c54dc59](h
 - 未決事項: source diff / contract deltaの出力形式、PRテンプレートの配置（リポジトリ内ファイル）、監査リハーサルの実施手順は実装時に確定し、本issueへ追記する。
 - 証跡: upstream SHA、oracle run ID、fixture hash、実行コマンド、差分ラベル、承認記録をartifactとして残す。
 - 2026-10-16: 本文を実装可能な形式へ整備し、実装に着手可能なため polished へ更新。
+
+## 検証
+
+- `tools/upstream-drift/audit.py` と `docs/upstream-drift.md`、PR テンプレートを追加。
+- 監査リハーサルは未実行（NOT_RUN）。golden の自動上書きは行わない。

@@ -1,9 +1,9 @@
 # [P1 / M5] README・API・example・配布とversionを整備する
 
-Status: polished
+Status: done
 Model: DeepSeek V4.1 Flash Free
 Created: 2026-10-16
-Updated: 2026-10-16
+Updated: 2026-10-17
 Branch: docs/0033-release-docs
 Priority: P1
 Milestone: M5
@@ -103,3 +103,8 @@ Upstream baseline: [shiguredo/mp4-rs@1282b704f44184ec792e1549b5d31e0c4c54dc59](h
 - 未決事項: 公開モジュール名、version規則、README.mbt.mdの分割、checklistの保存場所は実装時に確定し、本issueへ追記する。
 - 証跡: `moon check/test/fmt/info`の実行ログ、Rust oracle SHA、sample outputの突合結果をrelease checklistに残す。
 - 2026-10-16: 本文を実装可能な形式へ整備し、実装に着手可能なため polished へ更新。
+
+## 検証
+
+- `docs/compatibility.md` / `docs/release-checklist.md` / `docs/versioning.md` を追加し、README の status を更新。
+- 実際の publish・タグ作成・GitHub Release は未実施。
